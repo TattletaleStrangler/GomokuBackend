@@ -1,0 +1,31 @@
+# Secrets: never commit the real .env (see ../USER_ACTION.md, п. 3)
+.env
+*.env
+!.env.example
+
+# Java / Gradle
+build/
+.gradle/
+out/
+bin/
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Локальные данные БД и логи
+data/
+*.log
