@@ -4,20 +4,21 @@
 Техническое задание — [`../TZ_BACKEND.md`](../TZ_BACKEND.md), действия владельца —
 [`../USER_ACTION.md`](../USER_ACTION.md), состояние клиента — [`../Gomoku/README.md`](../Gomoku/README.md).
 
-## Что уже готово (каркас)
+## Что реализовано (MVP по ТЗ)
 
-- Gradle-проект с wrapper 9.5.1, Java 21, Spring Boot 4.2.0;
-- схема БД `src/main/resources/db/migration/V1__init.sql` — `users`, `refresh_tokens`,
-  `games`, `moves` с CHECK-ограничениями; Flyway применяет её при старте, Hibernate
-  только проверяет (`ddl-auto=validate`), схему никто, кроме Flyway, не меняет;
-- `application.yml` — только переменные окружения, секретов в файлах нет;
-- `Dockerfile` (multi-stage, запуск не от root) и `docker-compose.yml`
-  (app + postgres, healthcheck, `restart: unless-stopped`), значения — из `.env`;
-- интеграционный тест, поднимающий приложение на настоящем PostgreSQL через
-  Testcontainers; без запущенного Docker он **пропускается**, а не падает.
-
-Дальше по плану: аутентификация → правила игры на Java с золотыми кейсами → комнаты и
-партии → WebSocket-уведомления → серверные часы.
+| Блок | Что есть |
+|---|---|
+| Аккаунты | регистрация/вход по никнейму и паролю, BCrypt, `/me` со статистикой |
+| Сессии | JWT access (15 мин) + refresh-токен в БД только хешем, ротация, отзыв, повторное использование токена завершает все сессии |
+| Защита | rate limit на `/auth/*` (на адрес и на никнейм), единый формат ошибок с кодами, фиктивный хеш против перебора по времени |
+| Аккаунт | удаление из приложения с обезличиванием (партии соперника остаются) |
+| Правила | гомоку и рендзю на Java: overline, 4-4, 3-3, приоритет пятёрки, ничья — те же золотые кейсы, что у клиента |
+| Комнаты | создание с правилом и контролем времени (30+30 / 15+10 / 3+2 / без часов), вход по 6-символьному коду |
+| Партии | ходы с номером (`ply`), отказы на чужой ход/занятую клетку/неверный номер, сдача, выход |
+| Часы | серверные, инкремент после хода, живые значения в снимке, просрочка закрывается планировщиком |
+| Реальное время | `/ws/game`: аутентификация в рукопожатии, `GAME_STATE` при подключении, `MOVE_APPLIED`, `GAME_FINISHED`, `OPPONENT_JOINED` |
+| Переподключение | любой снимок (`GET /games/{id}` или событие сокета) содержит всё состояние и `serverTime` |
+| Тесты | 71 тест: правила, часы, rate limit, аккаунты, партии, сокет — всё на настоящем PostgreSQL через Testcontainers |
 
 ## Запуск
 
@@ -29,6 +30,7 @@ Copy-Item .env.example .env      # заполнить POSTGRES_PASSWORD и JWT_S
 
 # 2. весь стенд: приложение + база, миграции применяются при старте
 docker compose up --build        # живость: http://localhost:8080/actuator/health
+                                 # документация API: http://localhost:8080/swagger-ui.html
 
 # 3. только сборка и тесты
 $env:JAVA_HOME = '<путь к JDK 21>'   # например C:\Users\<вы>\.jdks\openjdk-21.0.2
@@ -36,15 +38,44 @@ $env:JAVA_HOME = '<путь к JDK 21>'   # например C:\Users\<вы>\.jd
 ```
 
 Gradle должен работать на JDK 21 или новее: компилятор закреплён через
-`options.release = 21`, поэтому сборка не зависит от версии JDK в PATH.
+`options.release = 21`.
 
-Проверка compose-файла без запуска:
+Проверка compose-файла без запуска: `docker compose config`.
+
+## Проверить руками
 
 ```powershell
-docker compose config
+$base = 'http://localhost:8080/api/v1'
+
+# два игрока
+$a = Invoke-RestMethod "$base/auth/register" -Method Post -ContentType 'application/json' `
+     -Body '{"nickname":"ann","password":"password-123"}'
+$b = Invoke-RestMethod "$base/auth/register" -Method Post -ContentType 'application/json' `
+     -Body '{"nickname":"bob","password":"password-123"}'
+
+# комната и вход по коду
+$game = Invoke-RestMethod "$base/games" -Method Post -ContentType 'application/json' `
+     -Headers @{ Authorization = "Bearer $($a.accessToken)" } `
+     -Body '{"rule":"RENJU","timeControl":"BLITZ"}'
+"код комнаты: $($game.code)"
+
+$joined = Invoke-RestMethod "$base/games/join" -Method Post -ContentType 'application/json' `
+     -Headers @{ Authorization = "Bearer $($b.accessToken)" } `
+     -Body "{`"code`":`"$($game.code)`"}"
+
+# ход чёрных
+Invoke-RestMethod "$base/games/$($game.gameId)/moves" -Method Post -ContentType 'application/json' `
+     -Headers @{ Authorization = "Bearer $($a.accessToken)" } `
+     -Body '{"ply":1,"x":7,"y":7}'
 ```
 
-Сценарии проверки лежат в `../TZ_BACKEND.md` §13 (локально) и §14 (сервер).
+Сокет: `ws://localhost:8080/ws/game` с заголовком `Authorization: Bearer <access>`;
+на подключении приходит `GAME_STATE`, дальше — события партии.
+
+## Вне объёма MVP
+
+Матчмейкинг, рейтинг и таблица лидеров, чат, друзья, зрители, push-уведомления,
+история партий онлайн в клиенте, e-mail и OAuth — по ТЗ часть 2, следующий этап.
 
 ## Лицензия
 

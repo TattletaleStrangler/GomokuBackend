@@ -1,0 +1,82 @@
+package com.oldmermaidman.gomoku.backend.game.web;
+
+import com.oldmermaidman.gomoku.backend.auth.AuthenticatedUser;
+import com.oldmermaidman.gomoku.backend.game.dto.CreateGameRequest;
+import com.oldmermaidman.gomoku.backend.game.GameService;
+import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
+import com.oldmermaidman.gomoku.backend.game.dto.JoinGameRequest;
+import com.oldmermaidman.gomoku.backend.game.dto.MoveRequest;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
+
+/**
+ * Rooms and games (TZ_BACKEND.md §7).
+ *
+ * <p>Commands only — the side that receives events is the WebSocket endpoint. Each
+ * call answers with the whole game state, so a client can replace its copy instead of
+ * patching it.
+ */
+@RestController
+@RequestMapping("/api/v1/games")
+public class GamesController {
+
+    private final GameService games;
+
+    public GamesController(GameService games) {
+        this.games = games;
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public GameSnapshot create(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody CreateGameRequest request) {
+        return games.create(user.id(), request.rule(), request.timeControl());
+    }
+
+    @PostMapping("/join")
+    public GameSnapshot join(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody JoinGameRequest request) {
+        return games.join(user.id(), request.code());
+    }
+
+    @GetMapping("/{id}")
+    public GameSnapshot get(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id) {
+        return games.get(user.id(), id);
+    }
+
+    @PostMapping("/{id}/moves")
+    public GameSnapshot move(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id,
+            @Valid @RequestBody MoveRequest request) {
+        return games.move(user.id(), id, request.ply(), request.x(), request.y());
+    }
+
+    @PostMapping("/{id}/resign")
+    public GameSnapshot resign(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id) {
+        return games.resign(user.id(), id);
+    }
+
+    @PostMapping("/{id}/leave")
+    public GameSnapshot leave(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id) {
+        return games.leave(user.id(), id);
+    }
+}
