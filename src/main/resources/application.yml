@@ -1,5 +1,8 @@
 server:
   port: ${SERVER_PORT:8080}
+  # Behind the reverse proxy the client address comes from X-Forwarded-For; the
+  # application port itself is never published, so the header cannot be spoofed.
+  forward-headers-strategy: framework
 
 spring:
   application:
@@ -50,6 +53,16 @@ app:
     secret: ${JWT_SECRET:}
     access-ttl: ${JWT_ACCESS_TTL:PT15M}
     refresh-ttl: ${JWT_REFRESH_TTL:P30D}
+  rate-limit:
+    # Caps on /api/v1/auth/*: per address and per nickname (TZ_BACKEND.md §9).
+    per-ip: 10
+    ip-window: PT1M
+    max-failed-logins: 5
+    failed-login-window: PT15M
+  game:
+    # Background job that finishes games whose clock ran out; off in tests that
+    # drive timeouts themselves.
+    timeout-sweeper-enabled: true
 
 logging:
   level:
