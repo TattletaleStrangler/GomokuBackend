@@ -1,5 +1,6 @@
 package com.oldmermaidman.gomoku.backend.game;
 
+import com.oldmermaidman.gomoku.backend.game.domain.ColorChoice;
 import com.oldmermaidman.gomoku.backend.game.domain.FinishReason;
 import com.oldmermaidman.gomoku.backend.game.domain.GameResult;
 import com.oldmermaidman.gomoku.backend.game.domain.GameStatus;
@@ -42,11 +43,16 @@ public class GameEntity {
     @Column(name = "time_control", nullable = false, length = 16, updatable = false)
     private TimeControl timeControl;
 
-    @Column(name = "black_user_id", nullable = false, updatable = false)
+    @Column(name = "black_user_id", nullable = false)
     private UUID blackUserId;
 
     @Column(name = "white_user_id")
     private UUID whiteUserId;
+
+    /** The colour the creator asked for; {@code ANY} lets the joiner choose. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "creator_color", nullable = false, length = 5)
+    private ColorChoice creatorColor;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
@@ -124,12 +130,19 @@ public class GameEntity {
     }
 
     private GameEntity(
-            UUID id, String code, Rule rule, TimeControl timeControl, UUID blackUserId, Instant now) {
+            UUID id,
+            String code,
+            Rule rule,
+            TimeControl timeControl,
+            UUID blackUserId,
+            ColorChoice creatorColor,
+            Instant now) {
         this.id = id;
         this.code = code;
         this.rule = rule;
         this.timeControl = timeControl;
         this.blackUserId = blackUserId;
+        this.creatorColor = creatorColor;
         this.status = GameStatus.WAITING;
         this.result = GameResult.NONE;
         this.finishReason = FinishReason.NONE;
@@ -141,17 +154,47 @@ public class GameEntity {
         }
     }
 
-    /** A room waiting for an opponent; the creator plays black. */
+    /**
+     * A room waiting for an opponent. The creator is stored in the black seat until the
+     * opponent joins; [ColorChoice] decides the final seating then.
+     */
     public static GameEntity waitingRoom(
-            String code, Rule rule, TimeControl timeControl, UUID creator, Instant now) {
-        return new GameEntity(UUID.randomUUID(), code, rule, timeControl, creator, now);
+            String code,
+            Rule rule,
+            TimeControl timeControl,
+            UUID creator,
+            ColorChoice creatorColor,
+            Instant now) {
+        return new GameEntity(UUID.randomUUID(), code, rule, timeControl, creator, creatorColor, now);
     }
 
     // ---- state changes ----------------------------------------------------
 
-    /** The opponent joined: the game starts and the clocks start with black. */
-    public void join(UUID opponent, Instant now) {
-        this.whiteUserId = opponent;
+    /**
+     * The opponent joined: the game starts, the seats are fixed and the clocks start
+     * with black.
+     *
+     * <p>When the creator left the colour open ({@link ColorChoice#ANY}), [joinerColor]
+     * decides the seating; otherwise the creator's choice wins and the joiner's wish is
+     * ignored, because the room already fixed both seats.
+     */
+    public void join(UUID opponent, ColorChoice joinerColor, Instant now) {
+        UUID creator = blackUserId;
+        boolean creatorPlaysBlack = switch (creatorColor) {
+            case BLACK -> true;
+            case WHITE -> false;
+            // The joiner picks: a white wish means the creator takes black.
+            case ANY -> joinerColor == ColorChoice.WHITE;
+        };
+
+        if (creatorPlaysBlack) {
+            this.blackUserId = creator;
+            this.whiteUserId = opponent;
+        } else {
+            this.blackUserId = opponent;
+            this.whiteUserId = creator;
+        }
+
         this.status = GameStatus.ACTIVE;
         this.startedAt = now;
         this.turnStartedAt = timeControl.isTimed() ? now : null;

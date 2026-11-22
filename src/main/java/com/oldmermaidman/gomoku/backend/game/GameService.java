@@ -4,6 +4,7 @@ import com.oldmermaidman.gomoku.backend.common.ApiError;
 import com.oldmermaidman.gomoku.backend.common.ApiException;
 import com.oldmermaidman.gomoku.backend.game.domain.Board;
 import com.oldmermaidman.gomoku.backend.game.domain.ClockCalculator;
+import com.oldmermaidman.gomoku.backend.game.domain.ColorChoice;
 import com.oldmermaidman.gomoku.backend.game.domain.FinishReason;
 import com.oldmermaidman.gomoku.backend.game.domain.GameResult;
 import com.oldmermaidman.gomoku.backend.game.domain.GameStatus;
@@ -79,19 +80,22 @@ public class GameService {
     // ---- rooms ------------------------------------------------------------
 
     @Transactional
-    public GameSnapshot create(UUID userId, Rule rule, TimeControl timeControl) {
+    public GameSnapshot create(
+            UUID userId, Rule rule, TimeControl timeControl, ColorChoice creatorColor) {
         Instant now = clock.instant();
         lockUser(userId);
         failIfPlaying(userId);
 
-        GameEntity game = GameEntity.waitingRoom(nextCode(), rule, timeControl, userId, now);
+        // No choice means the creator takes black, the historical default.
+        ColorChoice color = creatorColor == null ? ColorChoice.BLACK : creatorColor;
+        GameEntity game = GameEntity.waitingRoom(nextCode(), rule, timeControl, userId, color, now);
         games.save(game);
         events.publishEvent(new GameChanged(game.getId(), GameEventType.GAME_STATE));
         return snapshot(game, userId, List.of());
     }
 
     @Transactional
-    public GameSnapshot join(UUID userId, String rawCode) {
+    public GameSnapshot join(UUID userId, String rawCode, ColorChoice joinerColor) {
         Instant now = clock.instant();
 
         String code = rawCode.trim().toUpperCase(Locale.ROOT);
@@ -111,7 +115,7 @@ public class GameService {
         lockUser(userId);
         failIfPlaying(userId);
 
-        game.join(userId, now);
+        game.join(userId, joinerColor, now);
         events.publishEvent(new GameChanged(game.getId(), GameEventType.OPPONENT_JOINED));
         return snapshot(game, userId, List.of());
     }

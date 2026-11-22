@@ -87,12 +87,26 @@ public abstract class GameTestSupport extends ApiTestSupport {
     }
 
     protected Response createGame(Player player, String rule, String timeControl) throws Exception {
-        return post("/api/v1/games",
-                "{\"rule\":\"" + rule + "\",\"timeControl\":\"" + timeControl + "\"}", player.token());
+        return createGame(player, rule, timeControl, null);
+    }
+
+    /** [color] is BLACK / WHITE / ANY, or null to let the server use its default. */
+    protected Response createGame(Player player, String rule, String timeControl, String color)
+            throws Exception {
+        String body = "{\"rule\":\"" + rule + "\",\"timeControl\":\"" + timeControl + "\""
+                + (color == null ? "" : ",\"color\":\"" + color + "\"") + "}";
+        return post("/api/v1/games", body, player.token());
     }
 
     protected Response joinGame(Player player, String code) throws Exception {
-        return post("/api/v1/games/join", "{\"code\":\"" + code + "\"}", player.token());
+        return joinGame(player, code, null);
+    }
+
+    /** [color] is the joiner's wish; the room honours it only when it left the colour open. */
+    protected Response joinGame(Player player, String code, String color) throws Exception {
+        String body = "{\"code\":\"" + code + "\""
+                + (color == null ? "" : ",\"color\":\"" + color + "\"") + "}";
+        return post("/api/v1/games/join", body, player.token());
     }
 
     /** Creates a room and has the opponent join it; returns the game id. */

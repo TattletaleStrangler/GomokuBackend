@@ -42,14 +42,14 @@ public class GamesController {
     public GameSnapshot create(
             @AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody CreateGameRequest request) {
-        return games.create(user.id(), request.rule(), request.timeControl());
+        return games.create(user.id(), request.rule(), request.timeControl(), request.color());
     }
 
     @PostMapping("/join")
     public GameSnapshot join(
             @AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody JoinGameRequest request) {
-        return games.join(user.id(), request.code());
+        return games.join(user.id(), request.code(), request.color());
     }
 
     @GetMapping("/{id}")
