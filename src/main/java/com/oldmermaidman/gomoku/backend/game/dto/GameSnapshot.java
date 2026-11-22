@@ -27,7 +27,16 @@ public record GameSnapshot(
         ClockView clocks,
         Instant serverTime,
         String result,
-        String finishReason) {
+        String finishReason,
+        /** How many undo requests the viewer still has in this game. */
+        int undoRemaining,
+        /** The pending undo request, or null when none is pending. */
+        UndoView undo,
+        /**
+         * The stone an accepted undo removed, shown as a ghost only to the player who
+         * asked; null for the opponent and when nothing was taken back.
+         */
+        MoveView lastUndoneMove) {
 
     public record PlayerView(UUID userId, String nickname) {
     }
@@ -37,5 +46,12 @@ public record GameSnapshot(
 
     /** Milliseconds left; both null for a game without clocks. */
     public record ClockView(Long blackRemainingMs, Long whiteRemainingMs, String running) {
+    }
+
+    /**
+     * A pending undo request: who asked (as a colour), until when the opponent must
+     * answer (server time), and which move is at stake.
+     */
+    public record UndoView(String requestedBy, Instant deadline, int ply) {
     }
 }

@@ -6,6 +6,7 @@ import com.oldmermaidman.gomoku.backend.game.GameService;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
 import com.oldmermaidman.gomoku.backend.game.dto.JoinGameRequest;
 import com.oldmermaidman.gomoku.backend.game.dto.MoveRequest;
+import com.oldmermaidman.gomoku.backend.game.dto.UndoDecisionRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -71,6 +72,23 @@ public class GamesController {
             @AuthenticationPrincipal AuthenticatedUser user,
             @PathVariable UUID id) {
         return games.resign(user.id(), id);
+    }
+
+    /** Asks the opponent to take the last move back (FEATURES.md, online undo). */
+    @PostMapping("/{id}/undo-request")
+    public GameSnapshot requestUndo(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id) {
+        return games.requestUndo(user.id(), id);
+    }
+
+    /** The opponent's answer to a pending request. */
+    @PostMapping("/{id}/undo-decision")
+    public GameSnapshot decideUndo(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id,
+            @Valid @RequestBody UndoDecisionRequest request) {
+        return games.decideUndo(user.id(), id, request.accept());
     }
 
     @PostMapping("/{id}/leave")

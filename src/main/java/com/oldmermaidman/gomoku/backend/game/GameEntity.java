@@ -87,6 +87,38 @@ public class GameEntity {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
+    /** Who asked to take the last move back; null when no request is pending. */
+    @Column(name = "undo_requested_by")
+    private UUID undoRequestedBy;
+
+    /** The moment the opponent's answer stops counting. */
+    @Column(name = "undo_deadline")
+    private Instant undoDeadline;
+
+    /** The move the request is about. */
+    @Column(name = "undo_ply")
+    private Integer undoPly;
+
+    @Column(name = "undo_count_black", nullable = false)
+    private int undoCountBlack;
+
+    @Column(name = "undo_count_white", nullable = false)
+    private int undoCountWhite;
+
+    /** The stone an accepted undo took back, kept for the requester's ghost. */
+    @Column(name = "undo_ghost_ply")
+    private Integer undoGhostPly;
+
+    @Column(name = "undo_ghost_x")
+    private Short undoGhostX;
+
+    @Column(name = "undo_ghost_y")
+    private Short undoGhostY;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "undo_ghost_color", length = 5)
+    private Stone undoGhostColor;
+
     /** For JPA only. */
     protected GameEntity() {
     }
@@ -136,6 +168,7 @@ public class GameEntity {
         } else {
             whiteRemainingMs = newRemainingMs;
         }
+        clearGhostFor(mover);
         ply++;
         turnStartedAt = timeControl.isTimed() ? now : null;
     }
@@ -146,6 +179,8 @@ public class GameEntity {
         this.finishReason = reason;
         this.finishedAt = now;
         this.turnStartedAt = null;
+        // A request is moot once the game is over.
+        clearUndoRequest();
     }
 
     /**
@@ -162,6 +197,89 @@ public class GameEntity {
                 loser == Stone.BLACK ? GameResult.WHITE_WIN : GameResult.BLACK_WIN,
                 FinishReason.TIMEOUT,
                 now);
+    }
+
+    // ---- undo requests ----------------------------------------------------
+
+    /** Registers a request and counts it: a refusal costs an attempt too. */
+    public void requestUndo(UUID requester, int ply, Instant deadline) {
+        this.undoRequestedBy = requester;
+        this.undoPly = ply;
+        this.undoDeadline = deadline;
+        if (requester.equals(blackUserId)) {
+            undoCountBlack++;
+        } else {
+            undoCountWhite++;
+        }
+    }
+
+    public void clearUndoRequest() {
+        this.undoRequestedBy = null;
+        this.undoPly = null;
+        this.undoDeadline = null;
+    }
+
+    /** Freezes the clock of the player to move at the value it has right now. */
+    public void freezeClock(Stone player, long remainingNow) {
+        setRemaining(player, remainingNow);
+        this.turnStartedAt = null;
+    }
+
+    /** Restarts the frozen clock of the player to move. */
+    public void resumeClock(Instant now) {
+        this.turnStartedAt = timeControl.isTimed() ? now : null;
+    }
+
+    /**
+     * Takes the last move back: the stone is gone, the turn returns to its owner, and
+     * the cell is remembered so that player can see where the stone was.
+     *
+     * @param remainingAfterIncrementRemoved the mover's time without the increment the
+     *                                       move had earned, or null for an untimed game
+     */
+    public void acceptUndo(
+            Stone mover,
+            int ghostPly,
+            int ghostX,
+            int ghostY,
+            Long remainingAfterIncrementRemoved,
+            Instant now) {
+        if (remainingAfterIncrementRemoved != null) {
+            setRemaining(mover, remainingAfterIncrementRemoved);
+        }
+        this.undoGhostPly = ghostPly;
+        this.undoGhostX = (short) ghostX;
+        this.undoGhostY = (short) ghostY;
+        this.undoGhostColor = mover;
+        this.ply = ghostPly;
+        clearUndoRequest();
+        this.turnStartedAt = timeControl.isTimed() ? now : null;
+    }
+
+    public boolean hasPendingUndo() {
+        return undoRequestedBy != null;
+    }
+
+    public int undosUsedBy(Stone player) {
+        return player == Stone.BLACK ? undoCountBlack : undoCountWhite;
+    }
+
+    private void setRemaining(Stone player, long remaining) {
+        if (player == Stone.BLACK) {
+            blackRemainingMs = remaining;
+        } else {
+            whiteRemainingMs = remaining;
+        }
+    }
+
+    /** The ghost disappears once its owner plays again. */
+    private void clearGhostFor(Stone mover) {
+        if (undoGhostColor == mover) {
+            this.undoGhostPly = null;
+            this.undoGhostX = null;
+            this.undoGhostY = null;
+            this.undoGhostColor = null;
+        }
     }
 
     /** The room or game is closed without a result (a waiting room is left). */
@@ -265,5 +383,33 @@ public class GameEntity {
 
     public Instant getFinishedAt() {
         return finishedAt;
+    }
+
+    public UUID getUndoRequestedBy() {
+        return undoRequestedBy;
+    }
+
+    public Instant getUndoDeadline() {
+        return undoDeadline;
+    }
+
+    public Integer getUndoPly() {
+        return undoPly;
+    }
+
+    public Integer getUndoGhostPly() {
+        return undoGhostPly;
+    }
+
+    public Short getUndoGhostX() {
+        return undoGhostX;
+    }
+
+    public Short getUndoGhostY() {
+        return undoGhostY;
+    }
+
+    public Stone getUndoGhostColor() {
+        return undoGhostColor;
     }
 }

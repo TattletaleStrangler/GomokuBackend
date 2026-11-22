@@ -5,9 +5,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -23,15 +22,27 @@ import java.util.UUID;
  * <p>Requests go through the real filter chain and JSON mapping, so these tests see
  * exactly what the Android client will see. Subclasses add {@code @TestPropertySource}
  * when they need different limits; that also gives them their own context.
+ *
+ * <p>The database container is started <b>once for the whole JVM</b> and deliberately
+ * not managed by the Testcontainers extension: that extension stops a container after
+ * the class that declared it, while Spring keeps a context (and its connection pool)
+ * cached for later classes — which would leave them pointing at a dead port. Ryuk
+ * removes the container when the JVM exits.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers(disabledWithoutDocker = true)
 public abstract class ApiTestSupport {
 
     public static final String TEST_SECRET = "integration-test-secret-0123456789abcdef";
 
-    @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
+
+    static {
+        if (!DockerClientFactory.instance().isDockerAvailable()) {
+            throw new IllegalStateException(
+                    "API tests need a running Docker engine: PostgreSQL runs in a Testcontainers container.");
+        }
+        POSTGRES.start();
+    }
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {

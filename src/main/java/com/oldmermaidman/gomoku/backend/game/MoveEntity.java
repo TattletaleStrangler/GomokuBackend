@@ -48,6 +48,10 @@ public class MoveEntity {
     @Column(name = "remaining_ms_after")
     private Long remainingMsAfter;
 
+    /** True once an undo was requested for this move; it never resets. */
+    @Column(name = "undo_requested", nullable = false)
+    private boolean undoRequested;
+
     /** For JPA only. */
     protected MoveEntity() {
     }
@@ -88,5 +92,14 @@ public class MoveEntity {
 
     public Long getRemainingMsAfter() {
         return remainingMsAfter;
+    }
+
+    public boolean isUndoRequested() {
+        return undoRequested;
+    }
+
+    /** One request per move: the flag survives a refusal. */
+    public void markUndoRequested() {
+        this.undoRequested = true;
     }
 }

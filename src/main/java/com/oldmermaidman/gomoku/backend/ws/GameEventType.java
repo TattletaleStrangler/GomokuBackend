@@ -7,5 +7,11 @@ public enum GameEventType {
     OPPONENT_JOINED,
     MOVE_APPLIED,
     GAME_FINISHED,
-    OPPONENT_LEFT
+    OPPONENT_LEFT,
+    /** Someone asked to take their last move back; the opponent has three seconds. */
+    UNDO_REQUESTED,
+    /** The request was refused, or nobody answered in time. */
+    UNDO_DECIDED,
+    /** The request was accepted: the move is gone and the ghost marks where it was. */
+    UNDO_APPLIED
 }

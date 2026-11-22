@@ -33,8 +33,11 @@ public class TimeoutSweeper {
     @Scheduled(fixedDelay = 1_000)
     public void finishFlaggedGames() {
         int finished = games.expireFlagged();
-        if (finished > 0) {
-            log.info("Finished {} game(s) on timeout", finished);
+        // The same tick closes undo requests nobody answered.
+        int refused = games.expireUndoRequests();
+        if (finished > 0 || refused > 0) {
+            log.info("Sweeper: {} game(s) finished on timeout, {} undo request(s) refused",
+                    finished, refused);
         }
     }
 }

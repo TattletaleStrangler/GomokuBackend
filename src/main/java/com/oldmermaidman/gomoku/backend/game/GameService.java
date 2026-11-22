@@ -12,6 +12,7 @@ import com.oldmermaidman.gomoku.backend.game.domain.Rule;
 import com.oldmermaidman.gomoku.backend.game.domain.Stone;
 import com.oldmermaidman.gomoku.backend.game.domain.TimeControl;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
+import com.oldmermaidman.gomoku.backend.config.GameProperties;
 import com.oldmermaidman.gomoku.backend.user.UserRepository;
 import com.oldmermaidman.gomoku.backend.ws.GameChanged;
 import com.oldmermaidman.gomoku.backend.ws.GameEventType;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -55,6 +57,7 @@ public class GameService {
     private final MoveRepository moves;
     private final UserRepository users;
     private final Clock clock;
+    private final GameProperties properties;
     private final ApplicationEventPublisher events;
     private final SecureRandom random = new SecureRandom();
 
@@ -63,11 +66,13 @@ public class GameService {
             MoveRepository moves,
             UserRepository users,
             Clock clock,
+            GameProperties properties,
             ApplicationEventPublisher events) {
         this.games = games;
         this.moves = moves;
         this.users = users;
         this.clock = clock;
+        this.properties = properties;
         this.events = events;
     }
 
@@ -150,6 +155,10 @@ public class GameService {
         if (game.getStatus() != GameStatus.ACTIVE) {
             throw new ApiException(ApiError.GAME_FINISHED, "The game is not running");
         }
+        // While a request is pending the opponent answers it instead of moving.
+        if (game.hasPendingUndo()) {
+            throw new ApiException(ApiError.UNDO_ALREADY_REQUESTED, "Answer the undo request first");
+        }
 
         Stone colour = game.colourOf(userId);
         if (game.turn() != colour) {
@@ -226,6 +235,125 @@ public class GameService {
         return snapshot(game, userId, movesOf(gameId));
     }
 
+    // ---- undo requests ----------------------------------------------------
+
+    /**
+     * Asks the opponent to take the last move back.
+     *
+     * <p>Allowed only in the first seconds after the move ({@code app.game.undo.window}),
+     * once per move and at most {@code app.game.undo.limit} times per game. While the
+     * request is pending the only running clock — the opponent's — is frozen.
+     */
+    @Transactional
+    public GameSnapshot requestUndo(UUID userId, UUID gameId) {
+        Instant now = clock.instant();
+        GameEntity game = load(gameId);
+        assertParticipant(game, userId);
+
+        expireIfFlagged(game, now);
+        requireActive(game);
+
+        if (game.hasPendingUndo()) {
+            throw new ApiException(ApiError.UNDO_ALREADY_REQUESTED, "An undo request is already pending");
+        }
+
+        Stone me = game.colourOf(userId);
+        if (game.turn() == me) {
+            throw new ApiException(ApiError.UNDO_NOT_ALLOWED, "You have no move to take back");
+        }
+
+        List<MoveEntity> played = movesOf(gameId);
+        MoveEntity last = played.isEmpty() ? null : played.getLast();
+        if (last == null || last.getColor() != me) {
+            throw new ApiException(ApiError.UNDO_TOO_LATE, "The opponent has already moved");
+        }
+        if (Duration.between(last.getPlayedAt(), now).compareTo(properties.undo().window()) > 0) {
+            throw new ApiException(ApiError.UNDO_TOO_LATE, "Too late to take the move back");
+        }
+        if (last.isUndoRequested()) {
+            throw new ApiException(ApiError.UNDO_ALREADY_REQUESTED, "This move was already asked about");
+        }
+        if (game.undosUsedBy(me) >= properties.undo().limit()) {
+            throw new ApiException(ApiError.UNDO_LIMIT_REACHED, "No undo requests left");
+        }
+
+        last.markUndoRequested();
+        game.requestUndo(userId, last.getPly(), now.plus(properties.undo().decisionTimeout()));
+
+        if (game.getTimeControl().isTimed()) {
+            Stone toMove = game.turn();
+            long stored = Objects.requireNonNull(game.remainingOf(toMove), "timed game without a clock");
+            game.freezeClock(toMove, ClockCalculator.remainingAt(now, game.getTurnStartedAt(), stored));
+        }
+
+        events.publishEvent(new GameChanged(gameId, GameEventType.UNDO_REQUESTED));
+        return snapshot(game, userId, played);
+    }
+
+    /**
+     * The opponent answers. A late answer counts as a refusal: the deadline belongs to
+     * the server, and the same rule closes a request nobody answered at all.
+     */
+    @Transactional
+    public GameSnapshot decideUndo(UUID userId, UUID gameId, boolean accept) {
+        Instant now = clock.instant();
+        GameEntity game = load(gameId);
+        assertParticipant(game, userId);
+        requireActive(game);
+
+        if (!game.hasPendingUndo()) {
+            throw new ApiException(ApiError.UNDO_NOT_REQUESTED, "There is no undo request");
+        }
+        if (game.getUndoRequestedBy().equals(userId)) {
+            throw new ApiException(ApiError.UNDO_NOT_REQUESTED, "The opponent decides, not the requester");
+        }
+
+        if (!accept || !now.isBefore(game.getUndoDeadline())) {
+            game.clearUndoRequest();
+            game.resumeClock(now);
+            events.publishEvent(new GameChanged(gameId, GameEventType.UNDO_DECIDED));
+            return snapshot(game, userId, movesOf(gameId));
+        }
+
+        List<MoveEntity> played = movesOf(gameId);
+        MoveEntity undone = played.getLast();
+        Stone mover = undone.getColor();
+
+        // The move had earned its increment; taking it back takes the increment too.
+        Long remaining = game.getTimeControl().isTimed()
+                ? Math.max(0L, Objects.requireNonNull(game.remainingOf(mover), "timed game without a clock")
+                        - game.getTimeControl().incrementMs())
+                : null;
+
+        game.acceptUndo(mover, undone.getPly(), undone.getX(), undone.getY(), remaining, now);
+        moves.delete(undone);
+
+        events.publishEvent(new GameChanged(gameId, GameEventType.UNDO_APPLIED));
+        return snapshot(game, userId, movesOf(gameId));
+    }
+
+    /**
+     * Closes requests nobody answered, so a request cannot outlive its deadline even
+     * if the opponent has gone offline. Called by the same sweeper as the clocks.
+     *
+     * @return how many requests were refused by this call
+     */
+    @Transactional
+    public int expireUndoRequests() {
+        Instant now = clock.instant();
+        int expired = 0;
+        for (GameEntity game : games.findByStatus(GameStatus.ACTIVE)) {
+            if (!game.hasPendingUndo() || now.isBefore(game.getUndoDeadline())) {
+                continue;
+            }
+            game.clearUndoRequest();
+            game.resumeClock(now);
+            events.publishEvent(new GameChanged(game.getId(), GameEventType.UNDO_DECIDED));
+            expired++;
+        }
+        return expired;
+    }
+
     // ---- timeouts ---------------------------------------------------------
 
     /**
@@ -249,6 +377,12 @@ public class GameService {
     }
 
     // ---- internals --------------------------------------------------------
+
+    private static void requireActive(GameEntity game) {
+        if (game.getStatus() != GameStatus.ACTIVE) {
+            throw new ApiException(ApiError.GAME_FINISHED, "The game is not running");
+        }
+    }
 
     private GameEntity load(UUID gameId) {
         return games.findById(gameId)
@@ -348,8 +482,11 @@ public class GameService {
     private GameSnapshot snapshot(GameEntity game, UUID viewerId, List<MoveEntity> played) {
         Instant now = clock.instant();
         Map<UUID, String> nicknames = nicknamesOf(game);
-        Stone running = game.getStatus() == GameStatus.ACTIVE ? game.turn() : null;
         Stone viewer = game.colourOf(viewerId);
+        // Whose move it is stays known even while a pending request freezes the clock:
+        // `turn` says who plays, `clocks.running` says whether time is spent.
+        Stone turn = game.getStatus() == GameStatus.ACTIVE ? game.turn() : null;
+        Stone running = turn != null && game.getTurnStartedAt() != null ? turn : null;
 
         return new GameSnapshot(
                 game.getId(),
@@ -361,14 +498,54 @@ public class GameService {
                 player(game.getWhiteUserId(), nicknames),
                 viewer == null ? null : viewer.name(),
                 game.getPly(),
-                running == null ? null : running.name(),
+                turn == null ? null : turn.name(),
                 played.stream()
                         .map(m -> new GameSnapshot.MoveView(m.getPly(), m.getX(), m.getY(), m.getColor().name()))
                         .toList(),
                 clocksOf(game, now, running),
                 now,
                 game.getResult().name(),
-                game.getFinishReason().name());
+                game.getFinishReason().name(),
+                undoRemainingOf(game, viewer),
+                undoView(game, viewer),
+                ghostView(game, viewer));
+    }
+
+    /** What the "Отмена" button shows: the viewer's attempts left in this game. */
+    private int undoRemainingOf(GameEntity game, Stone viewer) {
+        if (viewer == null) {
+            return 0;
+        }
+        return Math.max(0, properties.undo().limit() - game.undosUsedBy(viewer));
+    }
+
+    /** The pending request, if any. */
+    private static GameSnapshot.UndoView undoView(GameEntity game, Stone viewer) {
+        if (!game.hasPendingUndo() || viewer == null) {
+            return null;
+        }
+        Stone requester = game.colourOf(game.getUndoRequestedBy());
+        return new GameSnapshot.UndoView(
+                requester == null ? null : requester.name(),
+                game.getUndoDeadline(),
+                game.getUndoPly() == null ? 0 : game.getUndoPly());
+    }
+
+    /**
+     * The stone an accepted undo removed. Only its owner sees it: the opponent is not
+     * told, so the client cannot draw a ghost that should not be there.
+     */
+    private static GameSnapshot.MoveView ghostView(GameEntity game, Stone viewer) {
+        if (game.getUndoGhostPly() == null
+                || game.getUndoGhostColor() == null
+                || game.getUndoGhostColor() != viewer) {
+            return null;
+        }
+        return new GameSnapshot.MoveView(
+                game.getUndoGhostPly(),
+                game.getUndoGhostX(),
+                game.getUndoGhostY(),
+                game.getUndoGhostColor().name());
     }
 
     private static GameSnapshot.PlayerView player(UUID userId, Map<UUID, String> nicknames) {

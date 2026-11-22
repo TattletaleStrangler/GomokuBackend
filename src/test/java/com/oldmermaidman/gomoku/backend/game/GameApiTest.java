@@ -1,115 +1,17 @@
 package com.oldmermaidman.gomoku.backend.game;
 
-import com.oldmermaidman.gomoku.backend.testsupport.ApiTestSupport;
+import com.oldmermaidman.gomoku.backend.testsupport.GameTestSupport;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
-import org.springframework.test.context.TestPropertySource;
 
-import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Rooms and games over HTTP, against a real PostgreSQL.
- *
- * <p>Time is taken from a mutable clock, so a timeout can be tested without waiting
- * for it, and the background sweeper is switched off to keep the test deterministic —
- * the timeout test calls the service directly.
+ * Rooms and games over HTTP, against a real PostgreSQL: creation, joining, moves,
+ * the end of a game, resignation and timeouts.
  */
-@TestPropertySource(properties = {
-        "app.rate-limit.per-ip=1000",
-        "app.rate-limit.max-failed-logins=1000",
-        "app.game.timeout-sweeper-enabled=false"
-})
-@Import(GameApiTest.TestClock.class)
-class GameApiTest extends ApiTestSupport {
-
-    /** A clock the test can move forward. */
-    static class MutableClock extends Clock {
-
-        private Instant now = Instant.parse("2026-01-01T10:00:00Z");
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-
-        void advance(Duration duration) {
-            now = now.plus(duration);
-        }
-    }
-
-    @TestConfiguration
-    static class TestClock {
-
-        private final MutableClock clock = new MutableClock();
-
-        /**
-         * A different bean name than the application's {@code clock}: overriding a
-         * bean definition is disabled, and {@code @Primary} is what picks this one.
-         */
-        @Bean
-        @Primary
-        MutableClock mutableClock() {
-            return clock;
-        }
-    }
-
-    @Autowired
-    private GameService games;
-
-    @Autowired
-    private MutableClock clock;
-
-    private record Player(String token, String nickname) {
-    }
-
-    private Player newPlayer() throws Exception {
-        String nickname = nickname();
-        Response registered = register(nickname, "password-123");
-        assertThat(registered.status()).isEqualTo(201);
-        return new Player(registered.text("$.accessToken"), nickname);
-    }
-
-    private Response createGame(Player player, String rule, String timeControl) throws Exception {
-        return post("/api/v1/games",
-                "{\"rule\":\"" + rule + "\",\"timeControl\":\"" + timeControl + "\"}", player.token());
-    }
-
-    private Response joinGame(Player player, String code) throws Exception {
-        return post("/api/v1/games/join", "{\"code\":\"" + code + "\"}", player.token());
-    }
-
-    private Response move(Player player, String gameId, int ply, int x, int y) throws Exception {
-        return post("/api/v1/games/" + gameId + "/moves",
-                "{\"ply\":" + ply + ",\"x\":" + x + ",\"y\":" + y + "}", player.token());
-    }
-
-    private Response action(Player player, String gameId, String name) throws Exception {
-        return post("/api/v1/games/" + gameId + "/" + name, player.token());
-    }
-
-    private Response snapshot(Player player, String gameId) throws Exception {
-        return get("/api/v1/games/" + gameId, player.token());
-    }
+class GameApiTest extends GameTestSupport {
 
     // ---- rooms ------------------------------------------------------------
 
@@ -128,6 +30,7 @@ class GameApiTest extends ApiTestSupport {
         assertThat(created.has("$.turn")).isFalse();
         assertThat(created.has("$.white")).isFalse();
         assertThat(created.number("$.clocks.blackRemainingMs")).isEqualTo(15 * 60_000);
+        assertThat(created.number("$.undoRemaining")).isEqualTo(3);
 
         Response joined = joinGame(white, code);
 
@@ -229,9 +132,7 @@ class GameApiTest extends ApiTestSupport {
     void fiveInARowFinishesTheGame() throws Exception {
         Player black = newPlayer();
         Player white = newPlayer();
-        Response created = createGame(black, "FREESTYLE", "RAPID");
-        String gameId = created.text("$.gameId");
-        joinGame(white, created.text("$.code"));
+        String gameId = openGame(black, white, "RAPID");
 
         int[][] blackStones = {{3, 7}, {4, 7}, {5, 7}, {6, 7}};
         int[][] whiteStones = {{0, 0}, {2, 2}, {4, 4}, {6, 6}};
@@ -259,9 +160,7 @@ class GameApiTest extends ApiTestSupport {
     void resigningGivesTheGameToTheOpponent() throws Exception {
         Player black = newPlayer();
         Player white = newPlayer();
-        Response created = createGame(black, "FREESTYLE", "RAPID");
-        String gameId = created.text("$.gameId");
-        joinGame(white, created.text("$.code"));
+        String gameId = openGame(black, white, "RAPID");
 
         Response resigned = action(white, gameId, "resign");
 
@@ -275,12 +174,10 @@ class GameApiTest extends ApiTestSupport {
     void aFallenFlagEndsTheGame() throws Exception {
         Player black = newPlayer();
         Player white = newPlayer();
-        Response created = createGame(black, "FREESTYLE", "BLITZ");
-        String gameId = created.text("$.gameId");
-        joinGame(white, created.text("$.code"));
+        String gameId = openGame(black, white, "BLITZ");
 
         // Black is to move with three minutes; move the clock past them.
-        clock.advance(Duration.ofMinutes(4));
+        advanceClock(Duration.ofMinutes(4));
         games.expireFlagged();
 
         Response after = snapshot(black, gameId);
@@ -294,8 +191,7 @@ class GameApiTest extends ApiTestSupport {
     @Test
     void aStrangerCannotSeeTheGame() throws Exception {
         Player black = newPlayer();
-        Response created = createGame(black, "FREESTYLE", "RAPID");
-        String gameId = created.text("$.gameId");
+        String gameId = createGame(black, "FREESTYLE", "RAPID").text("$.gameId");
 
         Response peeked = snapshot(newPlayer(), gameId);
 

@@ -63,6 +63,12 @@ app:
     # Background job that finishes games whose clock ran out; off in tests that
     # drive timeouts themselves.
     timeout-sweeper-enabled: true
+    undo:
+      # How long after a move it can still be taken back (2 s), how long the opponent
+      # has to answer (3 s), and how many requests each player gets per game.
+      window: PT2S
+      decision-timeout: PT3S
+      limit: 3
 
 logging:
   level:
