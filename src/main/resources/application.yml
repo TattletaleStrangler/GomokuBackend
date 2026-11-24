@@ -70,8 +70,14 @@ app:
       decision-timeout: PT3S
       limit: 3
     matchmaking:
-      # How long a public room nobody joined stays in the lobby (FEATURES.md, B1).
+      # How long a public room nobody joined stays in the lobby (FEATURES.md, B1), and
+      # the Elo band of quick match: a room accepts a wider range the longer it waits
+      # (FEATURES.md, B2).
       room-ttl: PT15M
+      band-base: 200
+      band-step: 50
+      band-step-seconds: 5
+      band-max: 600
 
 logging:
   level:

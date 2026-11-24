@@ -80,6 +80,15 @@ public abstract class ApiTestSupport {
                 return false;
             }
         }
+
+        /** A JSON boolean; false when the field is missing. */
+        public boolean flag(String path) {
+            try {
+                return Boolean.TRUE.equals(JsonPath.read(body, path));
+            } catch (RuntimeException e) {
+                return false;
+            }
+        }
     }
 
     /** Nicknames are unique, so every test uses its own. */

@@ -9,7 +9,8 @@ import java.util.UUID;
  * <p>The code is included because the room is public by definition: it is how the
  * client joins, with the same {@code POST /games/join} it uses for a private room.
  * {@code creatorColor} tells the joiner what the creator picked — {@code ANY} means
- * the joiner's own wish decides.
+ * the joiner's own wish decides. {@code creatorRating} is their Elo, and
+ * {@code ranked} says whether the game will settle it.
  */
 public record LobbyGameView(
         UUID gameId,
@@ -18,5 +19,7 @@ public record LobbyGameView(
         String timeControl,
         String creatorColor,
         String creatorNickname,
+        Integer creatorRating,
+        boolean ranked,
         Instant createdAt) {
 }

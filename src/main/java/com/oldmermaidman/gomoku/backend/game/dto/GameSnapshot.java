@@ -18,6 +18,8 @@ public record GameSnapshot(
         String rule,
         String timeControl,
         String status,
+        /** True for quick-play games, whose result settles the Elo rating. */
+        boolean ranked,
         PlayerView black,
         PlayerView white,
         String you,
@@ -38,7 +40,11 @@ public record GameSnapshot(
          */
         MoveView lastUndoneMove) {
 
-    public record PlayerView(UUID userId, String nickname) {
+    /**
+     * One player: {@code rating} is their current Elo, {@code ratingDelta} the change a
+     * just-finished ranked game produced (null in every other case).
+     */
+    public record PlayerView(UUID userId, String nickname, Integer rating, Integer ratingDelta) {
     }
 
     public record MoveView(int ply, int x, int y, String color) {

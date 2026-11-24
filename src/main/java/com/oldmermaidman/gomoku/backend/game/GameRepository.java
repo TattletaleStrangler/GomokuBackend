@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -37,22 +38,38 @@ public interface GameRepository extends JpaRepository<GameEntity, UUID> {
     List<GameEntity> findByStatus(GameStatus status);
 
     /**
-     * The oldest public room with these settings, locked until the transaction ends.
+     * The oldest public ranked room these settings and this rating can take, locked
+     * until the transaction ends (FEATURES.md, B2).
      *
-     * <p>{@code SKIP LOCKED} lets a second quick match take the next room instead of
-     * waiting behind this one; the advisory lock in {@code GameService} keeps two
-     * requests from each creating a room of their own.
+     * <p>The band starts at {@code bandBase} and widens by {@code bandStep} for every
+     * {@code bandStepSeconds} the room has waited, up to {@code bandMax}: the longer
+     * somebody waits, the more opponents become acceptable. {@code SKIP LOCKED} lets a
+     * second quick match take the next room instead of queuing behind this one; the
+     * advisory lock in {@code GameService} keeps two requests from each creating a room.
      */
     @Query(value = """
-            select * from games
-            where status = 'WAITING' and visibility = 'PUBLIC'
-              and rule = :rule and time_control = :timeControl
-            order by created_at
+            select g.* from games g
+            join users u on u.id = g.black_user_id
+            where g.status = 'WAITING' and g.visibility = 'PUBLIC' and g.ranked = true
+              and g.rule = :rule and g.time_control = :timeControl
+              and abs(u.rating - :rating) <= least(
+                    :bandMax,
+                    :bandBase + :bandStep * floor(
+                        extract(epoch from (cast(:now as timestamptz) - g.created_at))
+                        / :bandStepSeconds))
+            order by g.created_at
             limit 1
-            for update skip locked
+            for update of g skip locked
             """, nativeQuery = true)
-    Optional<GameEntity> findFirstWaitingPublicForUpdate(
-            @Param("rule") String rule, @Param("timeControl") String timeControl);
+    Optional<GameEntity> findWaitingRankedForUpdate(
+            @Param("rule") String rule,
+            @Param("timeControl") String timeControl,
+            @Param("rating") int rating,
+            @Param("bandBase") int bandBase,
+            @Param("bandStep") int bandStep,
+            @Param("bandStepSeconds") int bandStepSeconds,
+            @Param("bandMax") int bandMax,
+            @Param("now") Instant now);
 
     /** Public waiting rooms for the lobby; both filters are optional. */
     @Query(value = """

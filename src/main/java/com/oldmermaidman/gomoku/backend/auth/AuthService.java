@@ -205,6 +205,7 @@ public class AuthService {
         return new ProfileResponse(
                 user.getId(),
                 user.getNickname(),
+                user.getRating(),
                 user.getCreatedAt(),
                 new StatsResponse(stats.getWins(), stats.getLosses(), stats.getDraws()));
     }

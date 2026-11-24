@@ -20,6 +20,11 @@ public record GameProperties(Undo undo, Matchmaking matchmaking) {
     public record Undo(Duration window, Duration decisionTimeout, int limit) {
     }
 
-    public record Matchmaking(@DefaultValue("15m") Duration roomTtl) {
+    public record Matchmaking(
+            @DefaultValue("15m") Duration roomTtl,
+            @DefaultValue("200") int bandBase,
+            @DefaultValue("50") int bandStep,
+            @DefaultValue("5") int bandStepSeconds,
+            @DefaultValue("600") int bandMax) {
     }
 }

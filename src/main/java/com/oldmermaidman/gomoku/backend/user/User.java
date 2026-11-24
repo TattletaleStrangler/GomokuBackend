@@ -1,5 +1,6 @@
 package com.oldmermaidman.gomoku.backend.user;
 
+import com.oldmermaidman.gomoku.backend.game.domain.EloRating;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -31,6 +32,10 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Elo of ranked (quick-play) games; rooms by code never touch it. */
+    @Column(nullable = false)
+    private int rating;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -43,6 +48,7 @@ public class User {
         this.nickname = nickname;
         this.passwordHash = passwordHash;
         this.createdAt = createdAt;
+        this.rating = EloRating.START;
     }
 
     public UUID getId() {
@@ -59,6 +65,14 @@ public class User {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public int getRating() {
+        return rating;
+    }
+
+    public void setRating(int rating) {
+        this.rating = rating;
     }
 
     public Instant getDeletedAt() {

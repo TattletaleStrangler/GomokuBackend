@@ -60,6 +60,10 @@ public class GameEntity {
     @Column(nullable = false, length = 8)
     private Visibility visibility;
 
+    /** Quick-play games settle rating; rooms by code are casual. */
+    @Column(nullable = false)
+    private boolean ranked;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private GameStatus status;
@@ -131,6 +135,16 @@ public class GameEntity {
     @Column(name = "undo_ghost_color", length = 5)
     private Stone undoGhostColor;
 
+    /**
+     * The rating change the result produced for each player; null until a ranked game
+     * is settled. The columns double as the "already settled" flag.
+     */
+    @Column(name = "black_rating_delta")
+    private Integer blackRatingDelta;
+
+    @Column(name = "white_rating_delta")
+    private Integer whiteRatingDelta;
+
     /** For JPA only. */
     protected GameEntity() {
     }
@@ -143,6 +157,7 @@ public class GameEntity {
             UUID blackUserId,
             ColorChoice creatorColor,
             Visibility visibility,
+            boolean ranked,
             Instant now) {
         this.id = id;
         this.code = code;
@@ -151,6 +166,7 @@ public class GameEntity {
         this.blackUserId = blackUserId;
         this.creatorColor = creatorColor;
         this.visibility = visibility;
+        this.ranked = ranked;
         this.status = GameStatus.WAITING;
         this.result = GameResult.NONE;
         this.finishReason = FinishReason.NONE;
@@ -173,9 +189,10 @@ public class GameEntity {
             UUID creator,
             ColorChoice creatorColor,
             Visibility visibility,
+            boolean ranked,
             Instant now) {
         return new GameEntity(
-                UUID.randomUUID(), code, rule, timeControl, creator, creatorColor, visibility, now);
+                UUID.randomUUID(), code, rule, timeControl, creator, creatorColor, visibility, ranked, now);
     }
 
     // ---- state changes ----------------------------------------------------
@@ -404,6 +421,27 @@ public class GameEntity {
 
     public Visibility getVisibility() {
         return visibility;
+    }
+
+    public boolean isRanked() {
+        return ranked;
+    }
+
+    public Integer getBlackRatingDelta() {
+        return blackRatingDelta;
+    }
+
+    public Integer getWhiteRatingDelta() {
+        return whiteRatingDelta;
+    }
+
+    /**
+     * Records what the result changed for each player. Called once per ranked game;
+     * the stored values keep the settlement idempotent and survive a reconnect.
+     */
+    public void settleRating(int blackDelta, int whiteDelta) {
+        this.blackRatingDelta = blackDelta;
+        this.whiteRatingDelta = whiteDelta;
     }
 
     public GameStatus getStatus() {

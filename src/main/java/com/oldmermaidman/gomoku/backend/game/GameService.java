@@ -5,6 +5,7 @@ import com.oldmermaidman.gomoku.backend.common.ApiException;
 import com.oldmermaidman.gomoku.backend.game.domain.Board;
 import com.oldmermaidman.gomoku.backend.game.domain.ClockCalculator;
 import com.oldmermaidman.gomoku.backend.game.domain.ColorChoice;
+import com.oldmermaidman.gomoku.backend.game.domain.EloRating;
 import com.oldmermaidman.gomoku.backend.game.domain.FinishReason;
 import com.oldmermaidman.gomoku.backend.game.domain.GameResult;
 import com.oldmermaidman.gomoku.backend.game.domain.GameStatus;
@@ -16,6 +17,7 @@ import com.oldmermaidman.gomoku.backend.game.domain.Visibility;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
 import com.oldmermaidman.gomoku.backend.game.dto.LobbyGameView;
 import com.oldmermaidman.gomoku.backend.config.GameProperties;
+import com.oldmermaidman.gomoku.backend.user.User;
 import com.oldmermaidman.gomoku.backend.user.UserRepository;
 import com.oldmermaidman.gomoku.backend.ws.GameChanged;
 import com.oldmermaidman.gomoku.backend.ws.GameEventType;
@@ -103,7 +105,8 @@ public class GameService {
         // visibility means the room stays private to its code.
         ColorChoice color = creatorColor == null ? ColorChoice.BLACK : creatorColor;
         Visibility listed = visibility == null ? Visibility.PRIVATE : visibility;
-        GameEntity game = GameEntity.waitingRoom(nextCode(), rule, timeControl, userId, color, listed, now);
+        GameEntity game = GameEntity.waitingRoom(
+                nextCode(), rule, timeControl, userId, color, listed, false, now);
         games.save(game);
         events.publishEvent(new GameChanged(game.getId(), GameEventType.GAME_STATE));
         return snapshot(game, userId, List.of());
@@ -125,13 +128,21 @@ public class GameService {
     public GameSnapshot quickMatch(
             UUID userId, Rule rule, TimeControl timeControl, ColorChoice color) {
         Instant now = clock.instant();
-        lockUser(userId);
+        User me = lockUser(userId);
         failIfPlaying(userId);
 
         lockMatchmakingBucket(rule, timeControl);
 
-        Optional<GameEntity> waiting =
-                games.findFirstWaitingPublicForUpdate(rule.name(), timeControl.name());
+        GameProperties.Matchmaking matchmaking = properties.matchmaking();
+        Optional<GameEntity> waiting = games.findWaitingRankedForUpdate(
+                rule.name(),
+                timeControl.name(),
+                me.getRating(),
+                matchmaking.bandBase(),
+                matchmaking.bandStep(),
+                matchmaking.bandStepSeconds(),
+                matchmaking.bandMax(),
+                now);
         if (waiting.isPresent()) {
             GameEntity game = waiting.get();
             game.join(userId, color, now);
@@ -139,9 +150,10 @@ public class GameService {
             return snapshot(game, userId, List.of());
         }
 
+        // Quick play is ranked and leaves the colour open unless one was asked for.
         ColorChoice creatorColor = color == null ? ColorChoice.ANY : color;
         GameEntity game = GameEntity.waitingRoom(
-                nextCode(), rule, timeControl, userId, creatorColor, Visibility.PUBLIC, now);
+                nextCode(), rule, timeControl, userId, creatorColor, Visibility.PUBLIC, true, now);
         games.save(game);
         events.publishEvent(new GameChanged(game.getId(), GameEventType.GAME_STATE));
         return snapshot(game, userId, List.of());
@@ -158,18 +170,23 @@ public class GameService {
                 .map(GameEntity::getBlackUserId)
                 .filter(Objects::nonNull)
                 .toList();
-        Map<UUID, String> nicknames = new HashMap<>();
-        users.findAllById(creators).forEach(user -> nicknames.put(user.getId(), user.getNickname()));
+        Map<UUID, User> byId = new HashMap<>();
+        users.findAllById(creators).forEach(user -> byId.put(user.getId(), user));
 
         return rooms.stream()
-                .map(room -> new LobbyGameView(
-                        room.getId(),
-                        room.getCode(),
-                        room.getRule().name(),
-                        room.getTimeControl().name(),
-                        room.getCreatorColor().name(),
-                        nicknames.get(room.getBlackUserId()),
-                        room.getCreatedAt()))
+                .map(room -> {
+                    User creator = byId.get(room.getBlackUserId());
+                    return new LobbyGameView(
+                            room.getId(),
+                            room.getCode(),
+                            room.getRule().name(),
+                            room.getTimeControl().name(),
+                            room.getCreatorColor().name(),
+                            creator == null ? null : creator.getNickname(),
+                            creator == null ? null : creator.getRating(),
+                            room.isRanked(),
+                            room.getCreatedAt());
+                })
                 .toList();
     }
 
@@ -320,7 +337,8 @@ public class GameService {
         }
 
         Stone colour = game.colourOf(userId);
-        game.finish(
+        finishAndSettle(
+                game,
                 colour == Stone.BLACK ? GameResult.WHITE_WIN : GameResult.BLACK_WIN,
                 FinishReason.RESIGN,
                 now);
@@ -341,7 +359,8 @@ public class GameService {
             expireIfFlagged(game, now);
             if (game.getStatus() == GameStatus.ACTIVE) {
                 Stone colour = game.colourOf(userId);
-                game.finish(
+                finishAndSettle(
+                        game,
                         colour == Stone.BLACK ? GameResult.WHITE_WIN : GameResult.BLACK_WIN,
                         FinishReason.ABANDON,
                         now);
@@ -511,8 +530,9 @@ public class GameService {
         }
     }
 
-    private void lockUser(UUID userId) {
-        users.lockById(userId)
+    /** Locks the account row and returns it, so callers can read the current rating. */
+    private User lockUser(UUID userId) {
+        return users.lockById(userId)
                 .orElseThrow(() -> new ApiException(ApiError.UNAUTHORIZED, "Unknown account"));
     }
 
@@ -534,7 +554,51 @@ public class GameService {
 
         if (ClockCalculator.hasFlagFallen(now, game.getTurnStartedAt(), stored)) {
             game.flag(mover, now);
+            settleRating(game);
         }
+    }
+
+    /**
+     * Settles the Elo of a finished ranked game, exactly once. Rooms by code are
+     * casual and never come here; a game whose deltas are already stored is skipped,
+     * so the sweeper and a request cannot both score the same result.
+     */
+    private void settleRating(GameEntity game) {
+        if (!game.isRanked() || game.getBlackRatingDelta() != null) {
+            return;
+        }
+        if (game.getStatus() != GameStatus.FINISHED
+                || game.getBlackUserId() == null
+                || game.getWhiteUserId() == null) {
+            return;
+        }
+        double blackScore = switch (game.getResult()) {
+            case BLACK_WIN -> 1.0;
+            case WHITE_WIN -> 0.0;
+            case DRAW -> 0.5;
+            default -> -1.0;
+        };
+        if (blackScore < 0) {
+            return;
+        }
+
+        User black = users.lockById(game.getBlackUserId()).orElse(null);
+        User white = users.lockById(game.getWhiteUserId()).orElse(null);
+        if (black == null || white == null) {
+            return;
+        }
+
+        int blackAfter = EloRating.after(black.getRating(), white.getRating(), blackScore);
+        int whiteAfter = EloRating.after(white.getRating(), black.getRating(), 1.0 - blackScore);
+        game.settleRating(blackAfter - black.getRating(), whiteAfter - white.getRating());
+        black.setRating(blackAfter);
+        white.setRating(whiteAfter);
+    }
+
+    /** Ends a game and settles its rating in one step. */
+    private void finishAndSettle(GameEntity game, GameResult result, FinishReason reason, Instant now) {
+        game.finish(result, reason, now);
+        settleRating(game);
     }
 
     private Long chargeClock(GameEntity game, Stone mover, Instant now) {
@@ -549,14 +613,16 @@ public class GameService {
         return remainingAfter;
     }
 
-    private static void finishIfOver(GameEntity game, Referee.MoveResult result, Stone colour, Instant now) {
+    private void finishIfOver(GameEntity game, Referee.MoveResult result, Stone colour, Instant now) {
         switch (result.outcome()) {
-            case WIN -> game.finish(
+            case WIN -> finishAndSettle(
+                    game,
                     colour == Stone.BLACK ? GameResult.BLACK_WIN : GameResult.WHITE_WIN,
                     FinishReason.FIVE,
                     now);
-            case FORBIDDEN -> game.finish(GameResult.WHITE_WIN, FinishReason.FORBIDDEN, now);
-            case DRAW -> game.finish(GameResult.DRAW, FinishReason.NONE, now);
+            case FORBIDDEN -> finishAndSettle(
+                    game, GameResult.WHITE_WIN, FinishReason.FORBIDDEN, now);
+            case DRAW -> finishAndSettle(game, GameResult.DRAW, FinishReason.NONE, now);
             default -> {
                 // The game continues.
             }
@@ -597,7 +663,7 @@ public class GameService {
 
     private GameSnapshot snapshot(GameEntity game, UUID viewerId, List<MoveEntity> played) {
         Instant now = clock.instant();
-        Map<UUID, String> nicknames = nicknamesOf(game);
+        Map<UUID, User> players = usersOf(game);
         Stone viewer = game.colourOf(viewerId);
         // Whose move it is stays known even while a pending request freezes the clock:
         // `turn` says who plays, `clocks.running` says whether time is spent.
@@ -610,8 +676,9 @@ public class GameService {
                 game.getRule().name(),
                 game.getTimeControl().name(),
                 game.getStatus().name(),
-                player(game.getBlackUserId(), nicknames),
-                player(game.getWhiteUserId(), nicknames),
+                game.isRanked(),
+                player(game.getBlackUserId(), players, game.getBlackRatingDelta()),
+                player(game.getWhiteUserId(), players, game.getWhiteRatingDelta()),
                 viewer == null ? null : viewer.name(),
                 game.getPly(),
                 turn == null ? null : turn.name(),
@@ -664,8 +731,17 @@ public class GameService {
                 game.getUndoGhostColor().name());
     }
 
-    private static GameSnapshot.PlayerView player(UUID userId, Map<UUID, String> nicknames) {
-        return userId == null ? null : new GameSnapshot.PlayerView(userId, nicknames.get(userId));
+    private static GameSnapshot.PlayerView player(
+            UUID userId, Map<UUID, User> players, Integer ratingDelta) {
+        if (userId == null) {
+            return null;
+        }
+        User user = players.get(userId);
+        return new GameSnapshot.PlayerView(
+                userId,
+                user == null ? null : user.getNickname(),
+                user == null ? null : user.getRating(),
+                ratingDelta);
     }
 
     private static GameSnapshot.ClockView clocksOf(GameEntity game, Instant now, Stone running) {
@@ -689,12 +765,12 @@ public class GameService {
         return ClockCalculator.remainingAt(now, game.getTurnStartedAt(), stored);
     }
 
-    private Map<UUID, String> nicknamesOf(GameEntity game) {
+    private Map<UUID, User> usersOf(GameEntity game) {
         List<UUID> ids = Stream.of(game.getBlackUserId(), game.getWhiteUserId())
                 .filter(Objects::nonNull)
                 .toList();
-        Map<UUID, String> nicknames = new HashMap<>();
-        users.findAllById(ids).forEach(user -> nicknames.put(user.getId(), user.getNickname()));
-        return nicknames;
+        Map<UUID, User> players = new HashMap<>();
+        users.findAllById(ids).forEach(user -> players.put(user.getId(), user));
+        return players;
     }
 }
