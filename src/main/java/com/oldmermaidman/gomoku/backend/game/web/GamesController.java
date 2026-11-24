@@ -5,6 +5,7 @@ import com.oldmermaidman.gomoku.backend.game.domain.Rule;
 import com.oldmermaidman.gomoku.backend.game.domain.TimeControl;
 import com.oldmermaidman.gomoku.backend.game.dto.CreateGameRequest;
 import com.oldmermaidman.gomoku.backend.game.GameService;
+import com.oldmermaidman.gomoku.backend.game.dto.GameHistoryView;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
 import com.oldmermaidman.gomoku.backend.game.dto.JoinGameRequest;
 import com.oldmermaidman.gomoku.backend.game.dto.LobbyGameView;
@@ -73,6 +74,14 @@ public class GamesController {
             @RequestParam(required = false) Rule rule,
             @RequestParam(required = false) TimeControl timeControl) {
         return games.lobby(rule, timeControl);
+    }
+
+    /** The caller's finished games, newest first; the moves come from `/{id}`. */
+    @GetMapping("/history")
+    public List<GameHistoryView> history(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestParam(defaultValue = "20") int limit) {
+        return games.history(user.id(), limit);
     }
 
     @PostMapping("/join")

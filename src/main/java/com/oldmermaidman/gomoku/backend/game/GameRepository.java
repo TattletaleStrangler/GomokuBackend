@@ -1,6 +1,7 @@
 package com.oldmermaidman.gomoku.backend.game;
 
 import com.oldmermaidman.gomoku.backend.game.domain.GameStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -84,4 +85,18 @@ public interface GameRepository extends JpaRepository<GameEntity, UUID> {
             @Param("rule") String rule,
             @Param("timeControl") String timeControl,
             @Param("limit") int limit);
+
+    /**
+     * Finished games of a player, newest first (FEATURES.md, B2). Waiting rooms that
+     * were abandoned before anybody joined never appear: their status is ABANDONED.
+     */
+    @Query("""
+            select g from GameEntity g
+            where g.status = :status and (g.blackUserId = :userId or g.whiteUserId = :userId)
+            order by g.finishedAt desc
+            """)
+    List<GameEntity> findHistory(
+            @Param("userId") UUID userId,
+            @Param("status") GameStatus status,
+            Pageable pageable);
 }

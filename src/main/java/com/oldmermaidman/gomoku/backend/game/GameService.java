@@ -14,6 +14,7 @@ import com.oldmermaidman.gomoku.backend.game.domain.Rule;
 import com.oldmermaidman.gomoku.backend.game.domain.Stone;
 import com.oldmermaidman.gomoku.backend.game.domain.TimeControl;
 import com.oldmermaidman.gomoku.backend.game.domain.Visibility;
+import com.oldmermaidman.gomoku.backend.game.dto.GameHistoryView;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
 import com.oldmermaidman.gomoku.backend.game.dto.LobbyGameView;
 import com.oldmermaidman.gomoku.backend.config.GameProperties;
@@ -23,6 +24,7 @@ import com.oldmermaidman.gomoku.backend.ws.GameChanged;
 import com.oldmermaidman.gomoku.backend.ws.GameEventType;
 import jakarta.persistence.EntityManager;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +63,9 @@ public class GameService {
 
     /** The lobby shows at most this many rooms; one player can only ever hold one. */
     private static final int LOBBY_LIMIT = 50;
+
+    /** The history page size cap; the client asks for twenty by default. */
+    private static final int HISTORY_LIMIT = 50;
 
     private final GameRepository games;
     private final MoveRepository moves;
@@ -186,6 +191,52 @@ public class GameService {
                             creator == null ? null : creator.getRating(),
                             room.isRanked(),
                             room.getCreatedAt());
+                })
+                .toList();
+    }
+
+    /**
+     * A player's finished games, newest first (FEATURES.md, B2). Games still running
+     * and waiting rooms nobody joined are not history.
+     */
+    @Transactional(readOnly = true)
+    public List<GameHistoryView> history(UUID userId, int limit) {
+        int capped = Math.min(Math.max(limit, 1), HISTORY_LIMIT);
+        List<GameEntity> finished = games.findHistory(
+                userId, GameStatus.FINISHED, PageRequest.of(0, capped));
+
+        List<UUID> opponents = finished.stream()
+                .map(game -> game.colourOf(userId) == Stone.BLACK
+                        ? game.getWhiteUserId()
+                        : game.getBlackUserId())
+                .filter(Objects::nonNull)
+                .toList();
+        Map<UUID, User> byId = new HashMap<>();
+        users.findAllById(opponents).forEach(user -> byId.put(user.getId(), user));
+
+        return finished.stream()
+                .map(game -> {
+                    Stone me = game.colourOf(userId);
+                    UUID opponentId = me == Stone.BLACK
+                            ? game.getWhiteUserId()
+                            : game.getBlackUserId();
+                    User opponent = byId.get(opponentId);
+                    Integer delta = me == Stone.BLACK
+                            ? game.getBlackRatingDelta()
+                            : game.getWhiteRatingDelta();
+                    return new GameHistoryView(
+                            game.getId(),
+                            game.getRule().name(),
+                            game.getTimeControl().name(),
+                            game.isRanked(),
+                            game.getResult().name(),
+                            game.getFinishReason().name(),
+                            me == null ? null : me.name(),
+                            opponent == null ? null : opponent.getNickname(),
+                            opponent == null ? null : opponent.getRating(),
+                            delta,
+                            game.getFinishedAt(),
+                            Math.max(0, game.getPly() - 1));
                 })
                 .toList();
     }

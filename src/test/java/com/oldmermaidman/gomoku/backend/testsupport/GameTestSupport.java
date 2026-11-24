@@ -125,6 +125,14 @@ public abstract class GameTestSupport extends ApiTestSupport {
         return get("/api/v1/games/lobby", player.token());
     }
 
+    protected Response history(Player player) throws Exception {
+        return history(player, 20);
+    }
+
+    protected Response history(Player player, int limit) throws Exception {
+        return get("/api/v1/games/history?limit=" + limit, player.token());
+    }
+
     /** Creates a room and has the opponent join it; returns the game id. */
     protected String openGame(Player creator, Player opponent, String timeControl) throws Exception {
         Response created = createGame(creator, "FREESTYLE", timeControl);
