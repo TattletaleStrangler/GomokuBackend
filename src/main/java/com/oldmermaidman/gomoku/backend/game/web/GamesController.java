@@ -1,11 +1,15 @@
 package com.oldmermaidman.gomoku.backend.game.web;
 
 import com.oldmermaidman.gomoku.backend.auth.AuthenticatedUser;
+import com.oldmermaidman.gomoku.backend.game.domain.Rule;
+import com.oldmermaidman.gomoku.backend.game.domain.TimeControl;
 import com.oldmermaidman.gomoku.backend.game.dto.CreateGameRequest;
 import com.oldmermaidman.gomoku.backend.game.GameService;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
 import com.oldmermaidman.gomoku.backend.game.dto.JoinGameRequest;
+import com.oldmermaidman.gomoku.backend.game.dto.LobbyGameView;
 import com.oldmermaidman.gomoku.backend.game.dto.MoveRequest;
+import com.oldmermaidman.gomoku.backend.game.dto.QuickGameRequest;
 import com.oldmermaidman.gomoku.backend.game.dto.UndoDecisionRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -15,9 +19,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -42,7 +48,31 @@ public class GamesController {
     public GameSnapshot create(
             @AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody CreateGameRequest request) {
-        return games.create(user.id(), request.rule(), request.timeControl(), request.color());
+        return games.create(
+                user.id(),
+                request.rule(),
+                request.timeControl(),
+                request.color(),
+                request.visibility());
+    }
+
+    /**
+     * Quick match (FEATURES.md, B1): joins the oldest public room with the same rule
+     * and time control, or opens one and returns it in {@code WAITING}.
+     */
+    @PostMapping("/quick")
+    public GameSnapshot quickMatch(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody QuickGameRequest request) {
+        return games.quickMatch(user.id(), request.rule(), request.timeControl(), request.color());
+    }
+
+    /** The open-games list; both filters are optional. */
+    @GetMapping("/lobby")
+    public List<LobbyGameView> lobby(
+            @RequestParam(required = false) Rule rule,
+            @RequestParam(required = false) TimeControl timeControl) {
+        return games.lobby(rule, timeControl);
     }
 
     @PostMapping("/join")

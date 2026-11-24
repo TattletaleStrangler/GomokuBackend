@@ -109,6 +109,22 @@ public abstract class GameTestSupport extends ApiTestSupport {
         return post("/api/v1/games/join", body, player.token());
     }
 
+    protected Response quickMatch(Player player, String rule, String timeControl) throws Exception {
+        return quickMatch(player, rule, timeControl, null);
+    }
+
+    /** [color] is optional; null means "no preference" and opens the room as ANY. */
+    protected Response quickMatch(Player player, String rule, String timeControl, String color)
+            throws Exception {
+        String body = "{\"rule\":\"" + rule + "\",\"timeControl\":\"" + timeControl + "\""
+                + (color == null ? "" : ",\"color\":\"" + color + "\"") + "}";
+        return post("/api/v1/games/quick", body, player.token());
+    }
+
+    protected Response lobby(Player player) throws Exception {
+        return get("/api/v1/games/lobby", player.token());
+    }
+
     /** Creates a room and has the opponent join it; returns the game id. */
     protected String openGame(Player creator, Player opponent, String timeControl) throws Exception {
         Response created = createGame(creator, "FREESTYLE", timeControl);

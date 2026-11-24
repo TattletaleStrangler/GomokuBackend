@@ -12,11 +12,14 @@ import com.oldmermaidman.gomoku.backend.game.domain.Referee;
 import com.oldmermaidman.gomoku.backend.game.domain.Rule;
 import com.oldmermaidman.gomoku.backend.game.domain.Stone;
 import com.oldmermaidman.gomoku.backend.game.domain.TimeControl;
+import com.oldmermaidman.gomoku.backend.game.domain.Visibility;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
+import com.oldmermaidman.gomoku.backend.game.dto.LobbyGameView;
 import com.oldmermaidman.gomoku.backend.config.GameProperties;
 import com.oldmermaidman.gomoku.backend.user.UserRepository;
 import com.oldmermaidman.gomoku.backend.ws.GameChanged;
 import com.oldmermaidman.gomoku.backend.ws.GameEventType;
+import jakarta.persistence.EntityManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,12 +57,16 @@ public class GameService {
     private static final List<GameStatus> STARTED =
             List.of(GameStatus.ACTIVE, GameStatus.FINISHED, GameStatus.ABANDONED);
 
+    /** The lobby shows at most this many rooms; one player can only ever hold one. */
+    private static final int LOBBY_LIMIT = 50;
+
     private final GameRepository games;
     private final MoveRepository moves;
     private final UserRepository users;
     private final Clock clock;
     private final GameProperties properties;
     private final ApplicationEventPublisher events;
+    private final EntityManager entityManager;
     private final SecureRandom random = new SecureRandom();
 
     public GameService(
@@ -68,30 +75,135 @@ public class GameService {
             UserRepository users,
             Clock clock,
             GameProperties properties,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            EntityManager entityManager) {
         this.games = games;
         this.moves = moves;
         this.users = users;
         this.clock = clock;
         this.properties = properties;
         this.events = events;
+        this.entityManager = entityManager;
     }
 
     // ---- rooms ------------------------------------------------------------
 
     @Transactional
     public GameSnapshot create(
-            UUID userId, Rule rule, TimeControl timeControl, ColorChoice creatorColor) {
+            UUID userId,
+            Rule rule,
+            TimeControl timeControl,
+            ColorChoice creatorColor,
+            Visibility visibility) {
         Instant now = clock.instant();
         lockUser(userId);
         failIfPlaying(userId);
 
-        // No choice means the creator takes black, the historical default.
+        // No choice means the creator takes black, the historical default; no
+        // visibility means the room stays private to its code.
         ColorChoice color = creatorColor == null ? ColorChoice.BLACK : creatorColor;
-        GameEntity game = GameEntity.waitingRoom(nextCode(), rule, timeControl, userId, color, now);
+        Visibility listed = visibility == null ? Visibility.PRIVATE : visibility;
+        GameEntity game = GameEntity.waitingRoom(nextCode(), rule, timeControl, userId, color, listed, now);
         games.save(game);
         events.publishEvent(new GameChanged(game.getId(), GameEventType.GAME_STATE));
         return snapshot(game, userId, List.of());
+    }
+
+    /**
+     * Quick match (FEATURES.md, priority B1): joins the oldest public room with the
+     * same rule and time control, or opens one and waits in it.
+     *
+     * <p>The bucket lock serialises the find-or-create, so two players who press the
+     * button at the same moment do not each open a room of their own. Within the
+     * lock, {@code FOR UPDATE SKIP LOCKED} picks the row without queuing behind a
+     * room another request is already taking.
+     *
+     * <p>With no colour asked for, a quick-play room is opened as {@code ANY}: the
+     * opponent decides when they join.
+     */
+    @Transactional
+    public GameSnapshot quickMatch(
+            UUID userId, Rule rule, TimeControl timeControl, ColorChoice color) {
+        Instant now = clock.instant();
+        lockUser(userId);
+        failIfPlaying(userId);
+
+        lockMatchmakingBucket(rule, timeControl);
+
+        Optional<GameEntity> waiting =
+                games.findFirstWaitingPublicForUpdate(rule.name(), timeControl.name());
+        if (waiting.isPresent()) {
+            GameEntity game = waiting.get();
+            game.join(userId, color, now);
+            events.publishEvent(new GameChanged(game.getId(), GameEventType.OPPONENT_JOINED));
+            return snapshot(game, userId, List.of());
+        }
+
+        ColorChoice creatorColor = color == null ? ColorChoice.ANY : color;
+        GameEntity game = GameEntity.waitingRoom(
+                nextCode(), rule, timeControl, userId, creatorColor, Visibility.PUBLIC, now);
+        games.save(game);
+        events.publishEvent(new GameChanged(game.getId(), GameEventType.GAME_STATE));
+        return snapshot(game, userId, List.of());
+    }
+
+    /** Public rooms waiting for an opponent, oldest first (FEATURES.md, lobby). */
+    @Transactional(readOnly = true)
+    public List<LobbyGameView> lobby(Rule rule, TimeControl timeControl) {
+        List<GameEntity> rooms = games.findLobby(
+                rule == null ? null : rule.name(),
+                timeControl == null ? null : timeControl.name(),
+                LOBBY_LIMIT);
+        List<UUID> creators = rooms.stream()
+                .map(GameEntity::getBlackUserId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<UUID, String> nicknames = new HashMap<>();
+        users.findAllById(creators).forEach(user -> nicknames.put(user.getId(), user.getNickname()));
+
+        return rooms.stream()
+                .map(room -> new LobbyGameView(
+                        room.getId(),
+                        room.getCode(),
+                        room.getRule().name(),
+                        room.getTimeControl().name(),
+                        room.getCreatorColor().name(),
+                        nicknames.get(room.getBlackUserId()),
+                        room.getCreatedAt()))
+                .toList();
+    }
+
+    /**
+     * Closes public rooms nobody joined in time, so the lobby does not fill with
+     * ghosts. Private rooms are left alone: their creator may be waiting for a
+     * particular person.
+     */
+    @Transactional
+    public int expireWaitingRooms() {
+        Instant now = clock.instant();
+        Duration ttl = properties.matchmaking().roomTtl();
+        int expired = 0;
+        for (GameEntity room : games.findByStatus(GameStatus.WAITING)) {
+            if (room.getVisibility() != Visibility.PUBLIC
+                    || !room.getCreatedAt().plus(ttl).isBefore(now)) {
+                continue;
+            }
+            room.abandon(now);
+            events.publishEvent(new GameChanged(room.getId(), GameEventType.GAME_STATE));
+            expired++;
+        }
+        return expired;
+    }
+
+    /**
+     * Serialises quick match for the rest of the transaction on a (rule, clock)
+     * bucket. The lock lives in Postgres, so it holds across application instances.
+     */
+    private void lockMatchmakingBucket(Rule rule, TimeControl timeControl) {
+        entityManager.createNativeQuery(
+                        "select pg_advisory_xact_lock(hashtext('gomoku-matchmaking'), hashtext(?1))")
+                .setParameter(1, rule.name() + ':' + timeControl.name())
+                .getResultList();
     }
 
     @Transactional

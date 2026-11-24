@@ -7,6 +7,7 @@ import com.oldmermaidman.gomoku.backend.game.domain.GameStatus;
 import com.oldmermaidman.gomoku.backend.game.domain.Rule;
 import com.oldmermaidman.gomoku.backend.game.domain.Stone;
 import com.oldmermaidman.gomoku.backend.game.domain.TimeControl;
+import com.oldmermaidman.gomoku.backend.game.domain.Visibility;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -53,6 +54,11 @@ public class GameEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "creator_color", nullable = false, length = 5)
     private ColorChoice creatorColor;
+
+    /** Private rooms are shared by code; public ones are listed and matchmade. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 8)
+    private Visibility visibility;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
@@ -136,6 +142,7 @@ public class GameEntity {
             TimeControl timeControl,
             UUID blackUserId,
             ColorChoice creatorColor,
+            Visibility visibility,
             Instant now) {
         this.id = id;
         this.code = code;
@@ -143,6 +150,7 @@ public class GameEntity {
         this.timeControl = timeControl;
         this.blackUserId = blackUserId;
         this.creatorColor = creatorColor;
+        this.visibility = visibility;
         this.status = GameStatus.WAITING;
         this.result = GameResult.NONE;
         this.finishReason = FinishReason.NONE;
@@ -164,8 +172,10 @@ public class GameEntity {
             TimeControl timeControl,
             UUID creator,
             ColorChoice creatorColor,
+            Visibility visibility,
             Instant now) {
-        return new GameEntity(UUID.randomUUID(), code, rule, timeControl, creator, creatorColor, now);
+        return new GameEntity(
+                UUID.randomUUID(), code, rule, timeControl, creator, creatorColor, visibility, now);
     }
 
     // ---- state changes ----------------------------------------------------
@@ -386,6 +396,14 @@ public class GameEntity {
 
     public UUID getWhiteUserId() {
         return whiteUserId;
+    }
+
+    public ColorChoice getCreatorColor() {
+        return creatorColor;
+    }
+
+    public Visibility getVisibility() {
+        return visibility;
     }
 
     public GameStatus getStatus() {

@@ -35,4 +35,36 @@ public interface GameRepository extends JpaRepository<GameEntity, UUID> {
      * The number of simultaneous games is small by design (TZ_BACKEND.md §15).
      */
     List<GameEntity> findByStatus(GameStatus status);
+
+    /**
+     * The oldest public room with these settings, locked until the transaction ends.
+     *
+     * <p>{@code SKIP LOCKED} lets a second quick match take the next room instead of
+     * waiting behind this one; the advisory lock in {@code GameService} keeps two
+     * requests from each creating a room of their own.
+     */
+    @Query(value = """
+            select * from games
+            where status = 'WAITING' and visibility = 'PUBLIC'
+              and rule = :rule and time_control = :timeControl
+            order by created_at
+            limit 1
+            for update skip locked
+            """, nativeQuery = true)
+    Optional<GameEntity> findFirstWaitingPublicForUpdate(
+            @Param("rule") String rule, @Param("timeControl") String timeControl);
+
+    /** Public waiting rooms for the lobby; both filters are optional. */
+    @Query(value = """
+            select * from games
+            where status = 'WAITING' and visibility = 'PUBLIC'
+              and (cast(:rule as text) is null or rule = cast(:rule as text))
+              and (cast(:timeControl as text) is null or time_control = cast(:timeControl as text))
+            order by created_at
+            limit :limit
+            """, nativeQuery = true)
+    List<GameEntity> findLobby(
+            @Param("rule") String rule,
+            @Param("timeControl") String timeControl,
+            @Param("limit") int limit);
 }
