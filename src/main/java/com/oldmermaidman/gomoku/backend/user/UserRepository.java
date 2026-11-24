@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -47,6 +48,45 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /** Column aliases of {@link #statsFor(UUID)}. */
     interface StatsRow {
+        long getWins();
+
+        long getLosses();
+
+        long getDraws();
+    }
+
+    /**
+     * The leaderboard: players with at least one finished game, best rating first.
+     *
+     * <p>One aggregate query instead of a stats query per row; the tables are small and
+     * the result is capped by {@code limit}. Deleted accounts are anonymised and stay
+     * out of the list.
+     */
+    @Query(value = """
+            select u.id as user_id, u.nickname as nickname, u.rating as rating,
+                   count(g.id) filter (where (g.black_user_id = u.id and g.result = 'BLACK_WIN')
+                                         or (g.white_user_id = u.id and g.result = 'WHITE_WIN')) as wins,
+                   count(g.id) filter (where (g.black_user_id = u.id and g.result = 'WHITE_WIN')
+                                         or (g.white_user_id = u.id and g.result = 'BLACK_WIN')) as losses,
+                   count(g.id) filter (where g.result = 'DRAW') as draws
+            from users u
+            join games g on g.status = 'FINISHED'
+                 and (g.black_user_id = u.id or g.white_user_id = u.id)
+            where u.deleted_at is null
+            group by u.id, u.nickname, u.rating
+            order by u.rating desc, u.nickname asc
+            limit :limit
+            """, nativeQuery = true)
+    List<LeaderboardRowProjection> leaderboard(@Param("limit") int limit);
+
+    /** Column aliases of {@link #leaderboard(int)}. */
+    interface LeaderboardRowProjection {
+        UUID getUserId();
+
+        String getNickname();
+
+        int getRating();
+
         long getWins();
 
         long getLosses();

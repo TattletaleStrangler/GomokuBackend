@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -88,6 +89,18 @@ public abstract class ApiTestSupport {
             } catch (RuntimeException e) {
                 return false;
             }
+        }
+
+        /** How many elements a JSONPath filter matches; zero when nothing does. */
+        public int size(String path) {
+            return ((List<?>) JsonPath.read(body, path)).size();
+        }
+
+        /** The integers a JSONPath filter matches, in order. */
+        public List<Integer> numbers(String path) {
+            return ((List<?>) JsonPath.read(body, path)).stream()
+                    .map(value -> ((Number) value).intValue())
+                    .toList();
         }
     }
 

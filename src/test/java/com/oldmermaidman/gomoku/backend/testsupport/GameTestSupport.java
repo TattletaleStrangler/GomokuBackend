@@ -133,6 +133,14 @@ public abstract class GameTestSupport extends ApiTestSupport {
         return get("/api/v1/games/history?limit=" + limit, player.token());
     }
 
+    protected Response leaderboard(Player player) throws Exception {
+        return leaderboard(player, 50);
+    }
+
+    protected Response leaderboard(Player player, int limit) throws Exception {
+        return get("/api/v1/leaderboard?limit=" + limit, player.token());
+    }
+
     /** Creates a room and has the opponent join it; returns the game id. */
     protected String openGame(Player creator, Player opponent, String timeControl) throws Exception {
         Response created = createGame(creator, "FREESTYLE", timeControl);
