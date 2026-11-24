@@ -38,7 +38,12 @@ public record GameSnapshot(
          * The stone an accepted undo removed, shown as a ghost only to the player who
          * asked; null for the opponent and when nothing was taken back.
          */
-        MoveView lastUndoneMove) {
+        MoveView lastUndoneMove,
+        /**
+         * The room offered for a rematch of this finished game, or null. Both players
+         * see it; the room's own snapshot says whether they are in it already.
+         */
+        UUID rematchGameId) {
 
     /**
      * One player: {@code rating} is their current Elo, {@code ratingDelta} the change a

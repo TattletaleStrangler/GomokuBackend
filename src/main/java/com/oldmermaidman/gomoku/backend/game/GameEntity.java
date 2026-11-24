@@ -145,6 +145,10 @@ public class GameEntity {
     @Column(name = "white_rating_delta")
     private Integer whiteRatingDelta;
 
+    /** The room offered from this finished game, or null when none was offered. */
+    @Column(name = "rematch_game_id")
+    private UUID rematchGameId;
+
     /** For JPA only. */
     protected GameEntity() {
     }
@@ -442,6 +446,15 @@ public class GameEntity {
     public void settleRating(int blackDelta, int whiteDelta) {
         this.blackRatingDelta = blackDelta;
         this.whiteRatingDelta = whiteDelta;
+    }
+
+    public UUID getRematchGameId() {
+        return rematchGameId;
+    }
+
+    /** Points this finished game at the room offered for a rematch. */
+    public void offerRematch(UUID rematchId) {
+        this.rematchGameId = rematchId;
     }
 
     public GameStatus getStatus() {

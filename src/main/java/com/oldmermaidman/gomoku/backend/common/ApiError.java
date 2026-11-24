@@ -25,6 +25,7 @@ public enum ApiError {
     SELF_JOIN(HttpStatus.CONFLICT),
     ACTIVE_GAME_EXISTS(HttpStatus.CONFLICT),
     GAME_FINISHED(HttpStatus.CONFLICT),
+    REMATCH_NOT_ALLOWED(HttpStatus.CONFLICT),
     NOT_YOUR_TURN(HttpStatus.CONFLICT),
     WRONG_PLY(HttpStatus.CONFLICT),
     CELL_OCCUPIED(HttpStatus.CONFLICT),

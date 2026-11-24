@@ -421,8 +421,73 @@ public class GameService {
         return snapshot(game, userId, movesOf(gameId));
     }
 
-    // ---- undo requests ----------------------------------------------------
+    // ---- rematch ----------------------------------------------------------
 
+    /**
+     * Offers a rematch of a finished game (FUTURE.md).
+     *
+     * <p>The first caller opens a private room with the same rule and clock but with
+     * the colours swapped — they take the colour they did not play — and the finished
+     * game starts pointing at it, so the opponent is offered the same room. The second
+     * caller joins it and the game starts. Calling again while the room waits simply
+     * returns it, so a player who came back to the old screen does not open a second.
+     *
+     * <p>The rematch keeps {@code ranked} of the original, so two players who met by
+     * quick match play another rated game — but privately, so nobody else joins.
+     */
+    @Transactional
+    public GameSnapshot rematch(UUID userId, UUID gameId) {
+        Instant now = clock.instant();
+        GameEntity game = load(gameId);
+        assertParticipant(game, userId);
+        if (game.getStatus() != GameStatus.FINISHED) {
+            throw new ApiException(
+                    ApiError.REMATCH_NOT_ALLOWED, "Only a finished game can be rematched");
+        }
+
+        if (game.getRematchGameId() != null) {
+            GameEntity offered = games.findById(game.getRematchGameId()).orElse(null);
+            if (offered != null && offered.getStatus() == GameStatus.WAITING) {
+                if (offered.getBlackUserId().equals(userId)) {
+                    // The offerer came back: show the room they are already waiting in.
+                    return snapshot(offered, userId, List.of());
+                }
+                lockUser(userId);
+                failIfPlaying(userId);
+                offered.join(userId, null, now);
+                events.publishEvent(new GameChanged(offered.getId(), GameEventType.OPPONENT_JOINED));
+                return snapshot(offered, userId, movesOf(offered.getId()));
+            }
+            if (offered != null && offered.getStatus() == GameStatus.ACTIVE) {
+                assertParticipant(offered, userId);
+                return snapshot(offered, userId, movesOf(offered.getId()));
+            }
+            // The earlier offer is gone (abandoned or already over): open a fresh one.
+        }
+
+        lockUser(userId);
+        failIfPlaying(userId);
+
+        Stone mine = game.colourOf(userId);
+        // Colours swap: the offerer takes the colour they did not play.
+        ColorChoice myColour = mine == Stone.BLACK ? ColorChoice.WHITE : ColorChoice.BLACK;
+        GameEntity rematch = GameEntity.waitingRoom(
+                nextCode(),
+                game.getRule(),
+                game.getTimeControl(),
+                userId,
+                myColour,
+                Visibility.PRIVATE,
+                game.isRanked(),
+                now);
+        games.save(rematch);
+        game.offerRematch(rematch.getId());
+        // Tell the opponent about the offer: their finished screen shows it.
+        events.publishEvent(new GameChanged(gameId, GameEventType.GAME_STATE));
+        return snapshot(rematch, userId, List.of());
+    }
+
+    // ---- undo requests ----------------------------------------------------
     /**
      * Asks the opponent to take the last move back.
      *
@@ -742,7 +807,8 @@ public class GameService {
                 game.getFinishReason().name(),
                 undoRemainingOf(game, viewer),
                 undoView(game, viewer),
-                ghostView(game, viewer));
+                ghostView(game, viewer),
+                game.getRematchGameId());
     }
 
     /** What the "Отмена" button shows: the viewer's attempts left in this game. */

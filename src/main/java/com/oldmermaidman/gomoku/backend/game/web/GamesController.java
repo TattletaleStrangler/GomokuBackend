@@ -113,6 +113,14 @@ public class GamesController {
         return games.resign(user.id(), id);
     }
 
+    /** Offers or accepts a rematch of a finished game (FUTURE.md). */
+    @PostMapping("/{id}/rematch")
+    public GameSnapshot rematch(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id) {
+        return games.rematch(user.id(), id);
+    }
+
     /** Asks the opponent to take the last move back (FEATURES.md, online undo). */
     @PostMapping("/{id}/undo-request")
     public GameSnapshot requestUndo(

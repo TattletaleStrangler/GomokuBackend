@@ -163,6 +163,11 @@ public abstract class GameTestSupport extends ApiTestSupport {
         return action(player, gameId, "undo-request");
     }
 
+    /** Offers or accepts a rematch of a finished game. */
+    protected Response rematch(Player player, String gameId) throws Exception {
+        return action(player, gameId, "rematch");
+    }
+
     protected Response undoDecision(Player player, String gameId, boolean accept) throws Exception {
         return post("/api/v1/games/" + gameId + "/undo-decision",
                 "{\"accept\":" + accept + "}", player.token());
