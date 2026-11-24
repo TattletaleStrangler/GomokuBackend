@@ -168,6 +168,19 @@ public abstract class GameTestSupport extends ApiTestSupport {
         return action(player, gameId, "rematch");
     }
 
+    /** Stops being paired with the opponent of this game. */
+    protected Response block(Player player, String gameId) throws Exception {
+        return action(player, gameId, "block");
+    }
+
+    /** Reports the opponent of this game for [reason]. */
+    protected Response report(Player player, String gameId, String reason) throws Exception {
+        return post(
+                "/api/v1/games/" + gameId + "/report",
+                "{\"reason\":\"" + reason + "\"}",
+                player.token());
+    }
+
     protected Response undoDecision(Player player, String gameId, boolean accept) throws Exception {
         return post("/api/v1/games/" + gameId + "/undo-decision",
                 "{\"accept\":" + accept + "}", player.token());

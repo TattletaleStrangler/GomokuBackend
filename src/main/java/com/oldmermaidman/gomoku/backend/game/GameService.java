@@ -143,6 +143,7 @@ public class GameService {
                 rule.name(),
                 timeControl.name(),
                 me.getRating(),
+                userId,
                 matchmaking.bandBase(),
                 matchmaking.bandStep(),
                 matchmaking.bandStepSeconds(),
@@ -166,10 +167,11 @@ public class GameService {
 
     /** Public rooms waiting for an opponent, oldest first (FEATURES.md, lobby). */
     @Transactional(readOnly = true)
-    public List<LobbyGameView> lobby(Rule rule, TimeControl timeControl) {
+    public List<LobbyGameView> lobby(UUID userId, Rule rule, TimeControl timeControl) {
         List<GameEntity> rooms = games.findLobby(
                 rule == null ? null : rule.name(),
                 timeControl == null ? null : timeControl.name(),
+                userId,
                 LOBBY_LIMIT);
         List<UUID> creators = rooms.stream()
                 .map(GameEntity::getBlackUserId)

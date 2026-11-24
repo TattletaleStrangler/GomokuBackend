@@ -58,6 +58,10 @@ public interface GameRepository extends JpaRepository<GameEntity, UUID> {
                     :bandBase + :bandStep * floor(
                         extract(epoch from (cast(:now as timestamptz) - g.created_at))
                         / :bandStepSeconds))
+              and not exists (
+                    select 1 from blocks b
+                    where (b.blocker_id = :userId and b.blocked_id = g.black_user_id)
+                       or (b.blocker_id = g.black_user_id and b.blocked_id = :userId))
             order by g.created_at
             limit 1
             for update of g skip locked
@@ -66,24 +70,30 @@ public interface GameRepository extends JpaRepository<GameEntity, UUID> {
             @Param("rule") String rule,
             @Param("timeControl") String timeControl,
             @Param("rating") int rating,
+            @Param("userId") UUID userId,
             @Param("bandBase") int bandBase,
             @Param("bandStep") int bandStep,
             @Param("bandStepSeconds") int bandStepSeconds,
             @Param("bandMax") int bandMax,
             @Param("now") Instant now);
 
-    /** Public waiting rooms for the lobby; both filters are optional. */
+    /** Public waiting rooms for the lobby; both filters are optional and blocks hide rows. */
     @Query(value = """
             select * from games
             where status = 'WAITING' and visibility = 'PUBLIC'
               and (cast(:rule as text) is null or rule = cast(:rule as text))
               and (cast(:timeControl as text) is null or time_control = cast(:timeControl as text))
+              and not exists (
+                    select 1 from blocks b
+                    where (b.blocker_id = :viewer and b.blocked_id = black_user_id)
+                       or (b.blocker_id = black_user_id and b.blocked_id = :viewer))
             order by created_at
             limit :limit
             """, nativeQuery = true)
     List<GameEntity> findLobby(
             @Param("rule") String rule,
             @Param("timeControl") String timeControl,
+            @Param("viewer") UUID viewer,
             @Param("limit") int limit);
 
     /**

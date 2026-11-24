@@ -71,9 +71,10 @@ public class GamesController {
     /** The open-games list; both filters are optional. */
     @GetMapping("/lobby")
     public List<LobbyGameView> lobby(
+            @AuthenticationPrincipal AuthenticatedUser user,
             @RequestParam(required = false) Rule rule,
             @RequestParam(required = false) TimeControl timeControl) {
-        return games.lobby(rule, timeControl);
+        return games.lobby(user.id(), rule, timeControl);
     }
 
     /** The caller's finished games, newest first; the moves come from `/{id}`. */
