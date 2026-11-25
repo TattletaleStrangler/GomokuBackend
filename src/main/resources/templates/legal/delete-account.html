@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Удаление аккаунта — Гомоку</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { font: 16px/1.6 system-ui, sans-serif; margin: 0 auto; max-width: 760px; padding: 24px;
+               background: #fafafa; color: #1a1a1a; }
+        @media (prefers-color-scheme: dark) { body { background: #1c1c1e; color: #e5e5e5; } }
+        h1 { font-size: 26px; } h2 { font-size: 19px; margin-top: 28px; }
+        ol, ul { padding-left: 22px; }
+        .muted { opacity: .7; font-size: 14px; }
+        code { font-size: 14px; }
+    </style>
+</head>
+<body>
+<h1>Удаление аккаунта</h1>
+<p class="muted">Приложение «Гомоку» (Gomoku). Обновлено: 26 ноября 2026 года.</p>
+
+<p>Аккаунт в «Гомоку» нужен только для сетевой игры. Его можно удалить в любой момент
+    двумя способами.</p>
+
+<h2>Способ 1: в приложении (сразу)</h2>
+<ol>
+    <li>Откройте приложение и войдите в аккаунт.</li>
+    <li>Перейдите в <b>Настройки → Аккаунт</b>.</li>
+    <li>Нажмите <b>Удалить аккаунт</b> и подтвердите, введя пароль.</li>
+</ol>
+<p>После подтверждения аккаунт удаляется сразу: ник заменяется техническим
+    <code>del_…</code>, пароль становится недействительным, все входы на других
+    устройствах завершаются.</p>
+
+<h2>Способ 2: письмом (если нет доступа к аккаунту)</h2>
+<p>Напишите на контактный адрес
+    <span th:if="${contactEmail}"><a th:href="'mailto:' + ${contactEmail}" th:text="${contactEmail}">email</a></span>
+    <span th:unless="${contactEmail}">из страницы приложения в Google Play</span>
+    с указанием ника. Запрос выполняется в течение 30 дней; мы можем попросить
+    подтверждение, что аккаунт принадлежит вам.</p>
+
+<h2>Что удаляется</h2>
+<ul>
+    <li><b>Ник</b> — заменяется на технический идентификатор, освобождается для других;</li>
+    <li><b>пароль</b> — перестаёт действовать, хеш заменяется служебным значением;</li>
+    <li><b>сессии</b> — все токены входа отзываются немедленно;</li>
+    <li><b>доступ</b> — войти в удалённый аккаунт невозможно, восстановление невозможно.</li>
+</ul>
+
+<h2>Что остаётся</h2>
+<ul>
+    <li><b>Записи о сыгранных партиях</b> остаются в истории ваших соперников: иначе у
+        них пропали бы их собственные партии. Ваши данные в них отсутствуют — виден
+        только обезличенный аккаунт;</li>
+    <li><b>жалобы и блокировки</b>, если вы их отправляли: обезличиваются вместе с
+        аккаунтом и хранятся для разбора нарушений;</li>
+    <li><b>отчёты о падениях</b> и <b>журналы сервера</b> — до 30 дней, после чего
+        удаляются автоматически.</li>
+</ul>
+
+<h2>Данные, которые мы не храним</h2>
+<p>Настоящее имя, адрес электронной почты, телефон, геолокация, контакты и рекламный
+    идентификатор не собираются, поэтому удалять их не требуется. Реклама и сторонняя
+    аналитика в приложении отсутствуют.</p>
+
+<p class="muted">Подробности обработки данных: <a th:href="@{/legal/privacy}">Политика
+    конфиденциальности</a>.</p>
+
+<h2 lang="en">Account deletion in English</h2>
+<ol lang="en">
+    <li>Open the app and sign in.</li>
+    <li>Go to <b>Settings → Account</b>.</li>
+    <li>Tap <b>Delete account</b> and confirm with your password.</li>
+</ol>
+<p lang="en">Deletion is immediate: the nickname is replaced with a technical identifier,
+    the password stops working and every session is revoked. If you cannot sign in, write
+    to the contact address with your nickname; the request is handled within 30 days.
+    Records of games you played stay in your opponents' history without your data, and
+    crash reports and server logs are removed within 30 days.</p>
+</body>
+</html>

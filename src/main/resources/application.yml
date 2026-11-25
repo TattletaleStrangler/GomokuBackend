@@ -52,6 +52,10 @@ app:
     # Register an ordinary account with this nickname first, then restart: it is
     # promoted to administrator and may open /admin. Empty means nobody is promoted.
     nickname: ${ADMIN_NICKNAME:}
+  legal:
+    # Shown on /legal/privacy and /legal/delete-account, and required by Google Play.
+    # Set it before publishing: these pages are the public contact point.
+    contact-email: ${LEGAL_CONTACT_EMAIL:}
   jwt:
     # Secrets come from the environment only; see ../Backend/.env.example.
     secret: ${JWT_SECRET:}
