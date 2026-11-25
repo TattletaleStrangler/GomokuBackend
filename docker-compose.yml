@@ -33,6 +33,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-PT15M}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-P30D}
+      # The account promoted to administrator on startup; empty means no admin panel
+      # access for anybody (USER_ACTION.md §12).
+      ADMIN_NICKNAME: ${ADMIN_NICKNAME:-}
       SERVER_PORT: 8080
       TZ: ${TZ:-UTC}
     ports:
