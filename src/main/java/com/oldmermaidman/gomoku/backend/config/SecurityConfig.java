@@ -3,6 +3,8 @@ package com.oldmermaidman.gomoku.backend.config;
 import com.oldmermaidman.gomoku.backend.auth.JwtAuthenticationFilter;
 import com.oldmermaidman.gomoku.backend.common.ApiError;
 import com.oldmermaidman.gomoku.backend.common.ErrorWriter;
+import com.oldmermaidman.gomoku.backend.common.RateLimiter;
+import com.oldmermaidman.gomoku.backend.common.RequestLimitFilter;
 import com.oldmermaidman.gomoku.backend.user.AdminUserDetailsService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Bean;
@@ -63,7 +65,8 @@ public class SecurityConfig {
     SecurityFilterChain apiFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtFilter,
-            ErrorWriter errorWriter) throws Exception {
+            ErrorWriter errorWriter,
+            RateLimiter rateLimiter) throws Exception {
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -93,7 +96,12 @@ public class SecurityConfig {
                             instanceof ApiError apiError ? apiError : ApiError.UNAUTHORIZED;
                     errorWriter.write(response, recorded, recorded.name());
                 }))
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                // After the token has been read, so the limit follows the account; the
+                // anonymous crash-report endpoint is counted by address instead.
+                .addFilterAfter(
+                        new RequestLimitFilter(rateLimiter, errorWriter),
+                        JwtAuthenticationFilter.class);
 
         return http.build();
     }

@@ -6,6 +6,7 @@
     <h1>Админка Gomoku</h1>
     <p class="muted">Войдите аккаунтом, которому выдан доступ администратора.</p>
     <p class="error" th:if="${param.error}">Неверный ник или пароль, либо у аккаунта нет прав администратора.</p>
+    <p class="error" th:if="${param.locked}">Слишком много неудачных попыток. Подождите 15 минут и попробуйте снова.</p>
     <p class="muted" th:if="${param.logout}">Вы вышли.</p>
     <form th:action="@{/admin/login}" method="post">
         <input type="text" name="username" placeholder="Ник" autofocus autocomplete="username"/>

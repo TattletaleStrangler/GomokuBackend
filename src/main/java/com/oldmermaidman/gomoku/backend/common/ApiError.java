@@ -44,6 +44,7 @@ public enum ApiError {
     /** The account is banned from ranked play (or from the game entirely). */
     BANNED(HttpStatus.FORBIDDEN),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS),
+    PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final HttpStatus status;

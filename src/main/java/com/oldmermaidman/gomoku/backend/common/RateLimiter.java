@@ -78,6 +78,11 @@ public class RateLimiter {
         return hits.size();
     }
 
+    /** Forgets every key; tests that need a fresh limiter use it. */
+    void clearAll() {
+        hits.clear();
+    }
+
     @Scheduled(fixedDelay = 60_000)
     public void evictStale() {
         long now = clock.getAsLong();

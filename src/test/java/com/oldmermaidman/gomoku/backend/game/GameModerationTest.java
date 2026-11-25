@@ -1,5 +1,6 @@
 package com.oldmermaidman.gomoku.backend.game;
 
+import com.oldmermaidman.gomoku.backend.common.RequestLimitFilter;
 import com.oldmermaidman.gomoku.backend.game.domain.GameStatus;
 import com.oldmermaidman.gomoku.backend.game.domain.Visibility;
 import com.oldmermaidman.gomoku.backend.moderation.BlockRepository;
@@ -31,6 +32,9 @@ class GameModerationTest extends GameTestSupport {
 
     @Autowired
     private UserRepository users;
+
+    @Autowired
+    private com.oldmermaidman.gomoku.backend.common.RateLimiter limiter;
 
     @BeforeEach
     void cleanPublicRooms() {
@@ -142,15 +146,31 @@ class GameModerationTest extends GameTestSupport {
 
         // One complaint per game, so the cap needs twenty games.
         for (int i = 0; i < 20; i++) {
+            // The audit limits (P1) allow ten game calls a minute per player: a test that
+            // needs twenty starts every round from zero rather than weakening them.
+            resetGameLimits(bob, alice);
             String gameId = openGame(bob, alice, "UNTIMED");
             action(bob, gameId, "resign");
             assertThat(report(bob, gameId, "OTHER").status()).isEqualTo(204);
         }
 
+        resetGameLimits(bob, alice);
         String extra = openGame(bob, alice, "UNTIMED");
         action(bob, extra, "resign");
         Response refused = report(bob, extra, "OTHER");
         assertThat(refused.status()).isEqualTo(429);
         assertThat(refused.text("$.code")).isEqualTo("RATE_LIMITED");
+    }
+
+    /** Clears the per-player buckets this test would otherwise exhaust. */
+    private void resetGameLimits(Player creator, Player joiner) {
+        String creatorId = users.findByNicknameIgnoreCase(creator.nickname()).orElseThrow().getId().toString();
+        String joinerId = users.findByNicknameIgnoreCase(joiner.nickname()).orElseThrow().getId().toString();
+        for (String subject : new String[] {creatorId, joinerId}) {
+            limiter.reset(RequestLimitFilter.key("/api/v1/games", subject));
+            limiter.reset(RequestLimitFilter.key("/api/v1/games/join", subject));
+            limiter.reset(RequestLimitFilter.key("/api/v1/games/{id}/resign", subject));
+            limiter.reset(RequestLimitFilter.key("/api/v1/games/{id}/report", subject));
+        }
     }
 }

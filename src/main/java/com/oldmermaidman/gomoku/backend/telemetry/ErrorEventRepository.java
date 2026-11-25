@@ -12,4 +12,7 @@ public interface ErrorEventRepository extends JpaRepository<ErrorEventEntity, UU
     List<ErrorEventEntity> findFirst100ByOrderByOccurredAtDesc();
 
     long countByOccurredAtAfter(Instant after);
+
+    /** Retention: an attacker cannot fill the disk by making the server fail. */
+    long deleteByOccurredAtBefore(Instant cutoff);
 }

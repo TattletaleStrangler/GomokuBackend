@@ -64,7 +64,11 @@ public abstract class ApiTestSupport {
     }
 
     /** A response body read through JsonPath: status plus the fields that matter. */
-    public record Response(int status, String body) {
+    public record Response(int status, String body, java.net.http.HttpHeaders headers) {
+
+        public String header(String name) {
+            return headers.firstValue(name).orElse(null);
+        }
 
         public String text(String path) {
             return JsonPath.read(body, path);
@@ -139,6 +143,21 @@ public abstract class ApiTestSupport {
         return send(builder.build());
     }
 
+    /**
+     * A form POST, the way a browser submits the admin login page. Without a CSRF token
+     * the security chain answers 403 — enough for tests that only check the limiter in
+     * front of it.
+     */
+    protected Response postForm(String path, String body, String token) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+        if (token != null) {
+            builder.header("Authorization", "Bearer " + token);
+        }
+        return send(builder.build());
+    }
+
     protected Response get(String path, String token) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path)).GET();
         if (token != null) {
@@ -159,7 +178,7 @@ public abstract class ApiTestSupport {
 
     private Response send(HttpRequest request) throws Exception {
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        return new Response(response.statusCode(), response.body());
+        return new Response(response.statusCode(), response.body(), response.headers());
     }
 
     private URI uri(String path) {

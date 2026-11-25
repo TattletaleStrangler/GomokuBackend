@@ -1,5 +1,8 @@
 package com.oldmermaidman.gomoku.backend.telemetry;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -7,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -27,6 +31,11 @@ public class TelemetryService {
 
     /** Stack traces are useful up to a point; the rest is noise in the database. */
     private static final int STACK_LIMIT = 8_000;
+
+    /** How long an error or a crash is kept before the retention job drops it. */
+    private static final int RETENTION_DAYS = 30;
+
+    private static final Logger log = LoggerFactory.getLogger(TelemetryService.class);
 
     private final ErrorEventRepository errors;
     private final CrashReportRepository crashes;
@@ -105,6 +114,23 @@ public class TelemetryService {
     @Transactional(readOnly = true)
     public long crashesSince(Instant since) {
         return crashes.countByCreatedAtAfter(since);
+    }
+
+    /**
+     * Keeps the two tables small (security audit, P1): the crash endpoint is open, and
+     * 5xx can be provoked, so neither may grow without a bound. Thirty days is enough to
+     * spot a pattern and small enough to stay cheap.
+     */
+    @Scheduled(initialDelay = 60_000, fixedDelay = 3_600_000)
+    @Transactional
+    public void pruneOldEvents() {
+        Instant cutoff = clock.instant().minus(Duration.ofDays(RETENTION_DAYS));
+        long oldCrashes = crashes.deleteByCreatedAtBefore(cutoff);
+        long oldErrors = errors.deleteByOccurredAtBefore(cutoff);
+        if (oldCrashes > 0 || oldErrors > 0) {
+            log.info("Telemetry: dropped {} crash report(s) and {} error(s) older than {} days",
+                    oldCrashes, oldErrors, RETENTION_DAYS);
+        }
     }
 
     /**

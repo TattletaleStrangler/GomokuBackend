@@ -12,4 +12,7 @@ public interface CrashReportRepository extends JpaRepository<CrashReportEntity, 
     List<CrashReportEntity> findFirst200ByOrderByCreatedAtDesc();
 
     long countByCreatedAtAfter(Instant after);
+
+    /** Retention: reports older than the cutoff go away, so the table cannot grow forever. */
+    long deleteByCreatedAtBefore(Instant cutoff);
 }
