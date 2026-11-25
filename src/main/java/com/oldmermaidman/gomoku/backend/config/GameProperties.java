@@ -15,7 +15,7 @@ import java.time.Duration;
  * joined stays in the lobby.
  */
 @ConfigurationProperties(prefix = "app.game")
-public record GameProperties(Undo undo, Matchmaking matchmaking) {
+public record GameProperties(Undo undo, Matchmaking matchmaking, Draw draw) {
 
     public record Undo(Duration window, Duration decisionTimeout, int limit) {
     }
@@ -26,5 +26,12 @@ public record GameProperties(Undo undo, Matchmaking matchmaking) {
             @DefaultValue("50") int bandStep,
             @DefaultValue("5") int bandStepSeconds,
             @DefaultValue("600") int bandMax) {
+    }
+
+    /**
+     * A draw offer has the same shape as an undo request, but the answer window is
+     * longer: agreeing to a draw is a decision, not a misclick to correct.
+     */
+    public record Draw(Duration decisionTimeout, int limit) {
     }
 }

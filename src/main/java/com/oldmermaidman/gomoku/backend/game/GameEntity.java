@@ -149,6 +149,20 @@ public class GameEntity {
     @Column(name = "rematch_game_id")
     private UUID rematchGameId;
 
+    /** Who offered a draw; null when no offer is pending. */
+    @Column(name = "draw_requested_by")
+    private UUID drawRequestedBy;
+
+    /** The moment the opponent's answer to the draw offer stops counting. */
+    @Column(name = "draw_deadline")
+    private Instant drawDeadline;
+
+    @Column(name = "draw_count_black", nullable = false)
+    private int drawCountBlack;
+
+    @Column(name = "draw_count_white", nullable = false)
+    private int drawCountWhite;
+
     /** For JPA only. */
     protected GameEntity() {
     }
@@ -255,6 +269,7 @@ public class GameEntity {
         this.turnStartedAt = null;
         // A request is moot once the game is over.
         clearUndoRequest();
+        clearDrawRequest();
     }
 
     /**
@@ -336,6 +351,32 @@ public class GameEntity {
 
     public int undosUsedBy(Stone player) {
         return player == Stone.BLACK ? undoCountBlack : undoCountWhite;
+    }
+
+    // ---- draw offers ------------------------------------------------------
+
+    /** Registers a draw offer and counts it: a refusal costs an attempt too. */
+    public void requestDraw(UUID requester, Instant deadline) {
+        this.drawRequestedBy = requester;
+        this.drawDeadline = deadline;
+        if (requester.equals(blackUserId)) {
+            drawCountBlack++;
+        } else {
+            drawCountWhite++;
+        }
+    }
+
+    public void clearDrawRequest() {
+        this.drawRequestedBy = null;
+        this.drawDeadline = null;
+    }
+
+    public boolean hasPendingDraw() {
+        return drawRequestedBy != null;
+    }
+
+    public int drawsUsedBy(Stone player) {
+        return player == Stone.BLACK ? drawCountBlack : drawCountWhite;
     }
 
     private void setRemaining(Stone player, long remaining) {
@@ -503,6 +544,14 @@ public class GameEntity {
 
     public Instant getUndoDeadline() {
         return undoDeadline;
+    }
+
+    public UUID getDrawRequestedBy() {
+        return drawRequestedBy;
+    }
+
+    public Instant getDrawDeadline() {
+        return drawDeadline;
     }
 
     public Integer getUndoPly() {

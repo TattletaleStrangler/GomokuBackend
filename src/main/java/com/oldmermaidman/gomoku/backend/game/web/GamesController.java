@@ -4,6 +4,7 @@ import com.oldmermaidman.gomoku.backend.auth.AuthenticatedUser;
 import com.oldmermaidman.gomoku.backend.game.domain.Rule;
 import com.oldmermaidman.gomoku.backend.game.domain.TimeControl;
 import com.oldmermaidman.gomoku.backend.game.dto.CreateGameRequest;
+import com.oldmermaidman.gomoku.backend.game.dto.DrawDecisionRequest;
 import com.oldmermaidman.gomoku.backend.game.GameService;
 import com.oldmermaidman.gomoku.backend.game.dto.GameHistoryView;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
@@ -137,6 +138,23 @@ public class GamesController {
             @PathVariable UUID id,
             @Valid @RequestBody UndoDecisionRequest request) {
         return games.decideUndo(user.id(), id, request.accept());
+    }
+
+    /** Offers a draw (FUTURE.md); the opponent has ten seconds to answer. */
+    @PostMapping("/{id}/draw-offer")
+    public GameSnapshot requestDraw(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id) {
+        return games.requestDraw(user.id(), id);
+    }
+
+    /** The opponent's answer to a draw offer. */
+    @PostMapping("/{id}/draw-decision")
+    public GameSnapshot decideDraw(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id,
+            @Valid @RequestBody DrawDecisionRequest request) {
+        return games.decideDraw(user.id(), id, request.accept());
     }
 
     @PostMapping("/{id}/leave")

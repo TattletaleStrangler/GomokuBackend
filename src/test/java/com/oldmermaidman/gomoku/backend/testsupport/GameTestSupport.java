@@ -186,6 +186,17 @@ public abstract class GameTestSupport extends ApiTestSupport {
                 "{\"accept\":" + accept + "}", player.token());
     }
 
+    /** Offers a draw. */
+    protected Response drawOffer(Player player, String gameId) throws Exception {
+        return action(player, gameId, "draw-offer");
+    }
+
+    /** The opponent's answer to a draw offer. */
+    protected Response drawDecision(Player player, String gameId, boolean accept) throws Exception {
+        return post("/api/v1/games/" + gameId + "/draw-decision",
+                "{\"accept\":" + accept + "}", player.token());
+    }
+
     protected Response snapshot(Player player, String gameId) throws Exception {
         return get("/api/v1/games/" + gameId, player.token());
     }

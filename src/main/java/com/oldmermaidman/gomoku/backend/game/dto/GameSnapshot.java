@@ -43,7 +43,11 @@ public record GameSnapshot(
          * The room offered for a rematch of this finished game, or null. Both players
          * see it; the room's own snapshot says whether they are in it already.
          */
-        UUID rematchGameId) {
+        UUID rematchGameId,
+        /** How many draw offers the viewer still has in this game. */
+        int drawRemaining,
+        /** The pending draw offer, or null when none is pending. */
+        DrawView draw) {
 
     /**
      * One player: {@code rating} is their current Elo, {@code ratingDelta} the change a
@@ -64,5 +68,12 @@ public record GameSnapshot(
      * answer (server time), and which move is at stake.
      */
     public record UndoView(String requestedBy, Instant deadline, int ply) {
+    }
+
+    /**
+     * A pending draw offer: who asked (as a colour) and until when the opponent must
+     * answer (server time). Unlike an undo, there is no move at stake.
+     */
+    public record DrawView(String requestedBy, Instant deadline) {
     }
 }

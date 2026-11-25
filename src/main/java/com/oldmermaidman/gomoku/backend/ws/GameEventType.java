@@ -13,5 +13,9 @@ public enum GameEventType {
     /** The request was refused, or nobody answered in time. */
     UNDO_DECIDED,
     /** The request was accepted: the move is gone and the ghost marks where it was. */
-    UNDO_APPLIED
+    UNDO_APPLIED,
+    /** A draw was offered. */
+    DRAW_OFFERED,
+    /** The offer was answered: accepted or refused. */
+    DRAW_DECIDED
 }

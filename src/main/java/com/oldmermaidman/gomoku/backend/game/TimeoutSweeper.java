@@ -33,14 +33,15 @@ public class TimeoutSweeper {
     @Scheduled(fixedDelay = 1_000)
     public void finishFlaggedGames() {
         int finished = games.expireFlagged();
-        // The same tick closes undo requests nobody answered and public rooms nobody
-        // joined, so the lobby does not fill with ghosts.
+        // The same tick closes requests nobody answered, draw offers included, and
+        // public rooms nobody joined, so the lobby does not fill with ghosts.
         int refused = games.expireUndoRequests();
+        int refusedDraws = games.expireDrawRequests();
         int expiredRooms = games.expireWaitingRooms();
-        if (finished > 0 || refused > 0 || expiredRooms > 0) {
+        if (finished > 0 || refused > 0 || refusedDraws > 0 || expiredRooms > 0) {
             log.info("Sweeper: {} game(s) finished on timeout, {} undo request(s) refused, "
-                            + "{} public room(s) expired",
-                    finished, refused, expiredRooms);
+                            + "{} draw offer(s) refused, {} public room(s) expired",
+                    finished, refused, refusedDraws, expiredRooms);
         }
     }
 }

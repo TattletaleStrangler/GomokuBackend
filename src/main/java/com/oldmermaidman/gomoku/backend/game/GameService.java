@@ -342,8 +342,12 @@ public class GameService {
             throw new ApiException(ApiError.GAME_FINISHED, "The game is not running");
         }
         // While a request is pending the opponent answers it instead of moving.
-        if (game.hasPendingUndo()) {
-            throw new ApiException(ApiError.UNDO_ALREADY_REQUESTED, "Answer the undo request first");
+        if (game.hasPendingUndo() || game.hasPendingDraw()) {
+            throw new ApiException(
+                    game.hasPendingUndo()
+                            ? ApiError.UNDO_ALREADY_REQUESTED
+                            : ApiError.DRAW_ALREADY_REQUESTED,
+                    "Answer the pending request first");
         }
 
         Stone colour = game.colourOf(userId);
@@ -509,6 +513,9 @@ public class GameService {
         if (game.hasPendingUndo()) {
             throw new ApiException(ApiError.UNDO_ALREADY_REQUESTED, "An undo request is already pending");
         }
+        if (game.hasPendingDraw()) {
+            throw new ApiException(ApiError.REQUEST_ALREADY_PENDING, "Answer the draw offer first");
+        }
 
         Stone me = game.colourOf(userId);
         if (game.turn() == me) {
@@ -602,6 +609,99 @@ public class GameService {
             game.clearUndoRequest();
             game.resumeClock(now);
             events.publishEvent(new GameChanged(game.getId(), GameEventType.UNDO_DECIDED));
+            expired++;
+        }
+        return expired;
+    }
+
+    // ---- draw offers ------------------------------------------------------
+
+    /**
+     * Offers a draw (FUTURE.md). Unlike an undo, an offer is possible at any moment of
+     * a running game; the opponent decides within {@code app.game.draw.decision-timeout}
+     * and a refusal or a timeout costs the offerer one of {@code app.game.draw.limit}
+     * attempts. While the offer waits, the clock of the player who has to answer stops.
+     */
+    @Transactional
+    public GameSnapshot requestDraw(UUID userId, UUID gameId) {
+        Instant now = clock.instant();
+        GameEntity game = load(gameId);
+        assertParticipant(game, userId);
+
+        expireIfFlagged(game, now);
+        requireActive(game);
+
+        if (game.hasPendingUndo() || game.hasPendingDraw()) {
+            throw new ApiException(
+                    ApiError.REQUEST_ALREADY_PENDING, "Another request is already pending");
+        }
+
+        Stone me = game.colourOf(userId);
+        if (game.drawsUsedBy(me) >= properties.draw().limit()) {
+            throw new ApiException(ApiError.DRAW_LIMIT_REACHED, "No draw offers left");
+        }
+
+        game.requestDraw(userId, now.plus(properties.draw().decisionTimeout()));
+
+        Stone responder = game.turn();
+        if (responder != me && game.getTimeControl().isTimed()) {
+            long stored = Objects.requireNonNull(
+                    game.remainingOf(responder), "timed game without a clock");
+            game.freezeClock(
+                    responder, ClockCalculator.remainingAt(now, game.getTurnStartedAt(), stored));
+        }
+
+        events.publishEvent(new GameChanged(gameId, GameEventType.DRAW_OFFERED));
+        return snapshot(game, userId, movesOf(gameId));
+    }
+
+    /**
+     * The opponent answers. As with an undo, a late answer counts as a refusal: the
+     * deadline belongs to the server, and the same rule closes an offer nobody answered.
+     */
+    @Transactional
+    public GameSnapshot decideDraw(UUID userId, UUID gameId, boolean accept) {
+        Instant now = clock.instant();
+        GameEntity game = load(gameId);
+        assertParticipant(game, userId);
+        requireActive(game);
+
+        if (!game.hasPendingDraw()) {
+            throw new ApiException(ApiError.DRAW_NOT_REQUESTED, "There is no draw offer");
+        }
+        if (game.getDrawRequestedBy().equals(userId)) {
+            throw new ApiException(ApiError.DRAW_NOT_REQUESTED, "The opponent decides, not the offerer");
+        }
+
+        if (!accept || !now.isBefore(game.getDrawDeadline())) {
+            game.clearDrawRequest();
+            game.resumeClock(now);
+            events.publishEvent(new GameChanged(gameId, GameEventType.DRAW_DECIDED));
+            return snapshot(game, userId, movesOf(gameId));
+        }
+
+        finishAndSettle(game, GameResult.DRAW, FinishReason.AGREE, now);
+        events.publishEvent(new GameChanged(gameId, GameEventType.DRAW_DECIDED));
+        return snapshot(game, userId, movesOf(gameId));
+    }
+
+    /**
+     * Closes draw offers nobody answered, so an offer cannot outlive its deadline even
+     * if the opponent has gone offline.
+     *
+     * @return how many offers were refused by this call
+     */
+    @Transactional
+    public int expireDrawRequests() {
+        Instant now = clock.instant();
+        int expired = 0;
+        for (GameEntity game : games.findByStatus(GameStatus.ACTIVE)) {
+            if (!game.hasPendingDraw() || now.isBefore(game.getDrawDeadline())) {
+                continue;
+            }
+            game.clearDrawRequest();
+            game.resumeClock(now);
+            events.publishEvent(new GameChanged(game.getId(), GameEventType.DRAW_DECIDED));
             expired++;
         }
         return expired;
@@ -810,7 +910,9 @@ public class GameService {
                 undoRemainingOf(game, viewer),
                 undoView(game, viewer),
                 ghostView(game, viewer),
-                game.getRematchGameId());
+                game.getRematchGameId(),
+                drawRemainingOf(game, viewer),
+                drawView(game));
     }
 
     /** What the "Отмена" button shows: the viewer's attempts left in this game. */
@@ -819,6 +921,25 @@ public class GameService {
             return 0;
         }
         return Math.max(0, properties.undo().limit() - game.undosUsedBy(viewer));
+    }
+
+    /** What the "Ничья" button shows: the viewer's offers left in this game. */
+    private int drawRemainingOf(GameEntity game, Stone viewer) {
+        if (viewer == null) {
+            return 0;
+        }
+        return Math.max(0, properties.draw().limit() - game.drawsUsedBy(viewer));
+    }
+
+    /** The pending draw offer, if any. */
+    private static GameSnapshot.DrawView drawView(GameEntity game) {
+        if (!game.hasPendingDraw()) {
+            return null;
+        }
+        Stone offerer = game.colourOf(game.getDrawRequestedBy());
+        return new GameSnapshot.DrawView(
+                offerer == null ? null : offerer.name(),
+                game.getDrawDeadline());
     }
 
     /** The pending request, if any. */

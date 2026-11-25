@@ -12,6 +12,8 @@ public enum FinishReason {
     RESIGN,
     /** A player left the game or the room. */
     ABANDON,
+    /** Both players agreed to a draw. */
+    AGREE,
     /** Not finished, or finished as a draw. */
     NONE
 }

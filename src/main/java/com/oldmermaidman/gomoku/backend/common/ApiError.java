@@ -36,6 +36,11 @@ public enum ApiError {
     UNDO_LIMIT_REACHED(HttpStatus.CONFLICT),
     UNDO_ALREADY_REQUESTED(HttpStatus.CONFLICT),
     UNDO_NOT_REQUESTED(HttpStatus.CONFLICT),
+    DRAW_ALREADY_REQUESTED(HttpStatus.CONFLICT),
+    DRAW_NOT_REQUESTED(HttpStatus.CONFLICT),
+    DRAW_LIMIT_REACHED(HttpStatus.CONFLICT),
+    /** An undo request or a draw offer is already waiting for an answer. */
+    REQUEST_ALREADY_PENDING(HttpStatus.CONFLICT),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
