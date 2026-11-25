@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('Жалобы')}"></head>
+<body>
+<nav th:replace="~{admin/fragments :: nav}"></nav>
+<main>
+    <h1>Жалобы</h1>
+    <p class="muted">Одна жалоба — это сигнал, а не приговор. Смотрите на партию и на то,
+        сколько разных людей жалуются на один аккаунт.</p>
+
+    <p>
+        <a th:href="@{/admin/reports}">Все</a>
+        <span th:each="s : ${statuses}">
+            · <a th:href="@{/admin/reports(status=${s})}" th:text="${s}"
+                 th:style="${status != null and status.name() == s.name()} ? 'font-weight:700' : ''">NEW</a>
+        </span>
+    </p>
+
+    <table>
+        <tr>
+            <th>Когда</th>
+            <th>Статус</th>
+            <th>Причина</th>
+            <th>Кто пожаловался</th>
+            <th>На кого</th>
+            <th>Жалоб на аккаунт</th>
+            <th></th>
+        </tr>
+        <tr th:each="row : ${rows}">
+            <td th:text="${#temporals.format(row.report.createdAt, 'dd.MM HH:mm')}">01.01 00:00</td>
+            <td><span class="pill" th:classappend="${row.report.status}" th:text="${row.report.status}">NEW</span></td>
+            <td th:text="${row.report.reason}">OTHER</td>
+            <td th:text="${row.reporterNickname}">ann</td>
+            <td th:text="${row.reportedNickname}">bob</td>
+            <td>
+                <span th:text="${row.reportsAgainst}">1</span>
+                <span class="muted" th:text="'(' + ${row.distinctReporters} + ' чел.)'">(1 чел.)</span>
+            </td>
+            <td><a th:href="@{/admin/reports/{id}(id=${row.report.id})}">Открыть</a></td>
+        </tr>
+    </table>
+    <p class="muted" th:if="${rows.isEmpty()}">Пусто: жалоб с таким статусом нет.</p>
+</main>
+</body>
+</html>

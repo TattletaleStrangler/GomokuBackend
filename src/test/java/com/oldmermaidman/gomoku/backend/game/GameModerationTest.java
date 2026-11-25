@@ -119,17 +119,37 @@ class GameModerationTest extends GameTestSupport {
     }
 
     @Test
-    void reportsAreCappedPerDay() throws Exception {
+    void theSameGameCannotBeReportedTwice() throws Exception {
         Player alice = newPlayer();
         Player bob = newPlayer();
         String gameId = openGame(alice, bob, "UNTIMED");
         action(alice, gameId, "resign");
 
+        assertThat(report(bob, gameId, "OTHER").status()).isEqualTo(204);
+        // The second complaint about the same game is accepted and ignored.
+        assertThat(report(bob, gameId, "CHEATING").status()).isEqualTo(204);
+
+        long stored = reports.findAll().stream()
+                .filter(row -> row.getGameId() != null && row.getGameId().toString().equals(gameId))
+                .count();
+        assertThat(stored).isEqualTo(1);
+    }
+
+    @Test
+    void reportsAreCappedPerDay() throws Exception {
+        Player alice = newPlayer();
+        Player bob = newPlayer();
+
+        // One complaint per game, so the cap needs twenty games.
         for (int i = 0; i < 20; i++) {
+            String gameId = openGame(bob, alice, "UNTIMED");
+            action(bob, gameId, "resign");
             assertThat(report(bob, gameId, "OTHER").status()).isEqualTo(204);
         }
 
-        Response refused = report(bob, gameId, "OTHER");
+        String extra = openGame(bob, alice, "UNTIMED");
+        action(bob, extra, "resign");
+        Response refused = report(bob, extra, "OTHER");
         assertThat(refused.status()).isEqualTo(429);
         assertThat(refused.text("$.code")).isEqualTo("RATE_LIMITED");
     }

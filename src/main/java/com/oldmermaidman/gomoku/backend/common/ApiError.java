@@ -41,6 +41,8 @@ public enum ApiError {
     DRAW_LIMIT_REACHED(HttpStatus.CONFLICT),
     /** An undo request or a draw offer is already waiting for an answer. */
     REQUEST_ALREADY_PENDING(HttpStatus.CONFLICT),
+    /** The account is banned from ranked play (or from the game entirely). */
+    BANNED(HttpStatus.FORBIDDEN),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 

@@ -76,6 +76,11 @@ public abstract class GameTestSupport extends ApiTestSupport {
         clock.advance(duration);
     }
 
+    /** What the server thinks "now" is; the same clock the services use. */
+    protected Instant now() {
+        return clock.instant();
+    }
+
     protected record Player(String token, String nickname) {
     }
 

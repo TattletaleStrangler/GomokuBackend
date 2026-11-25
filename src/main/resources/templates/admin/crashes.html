@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('Падения клиента')}"></head>
+<body>
+<nav th:replace="~{admin/fragments :: nav}"></nav>
+<main>
+    <h1>Падения клиента</h1>
+    <p class="muted">
+        Отчёты присылает приложение при следующем запуске. Одинаковые падения сгруппированы
+        по отпечатку: «12 раз» — это одна ошибка, а не двенадцать.
+    </p>
+    <table>
+        <tr>
+            <th>Исключение</th><th>Случаев</th><th>Первый раз</th><th>Последний раз</th>
+            <th>Устройство</th><th>Версия</th><th>Стек</th>
+        </tr>
+        <tr th:each="group : ${groups}">
+            <td>
+                <span th:text="${group.exception} ?: '—'">java.lang.NullPointerException</span><br/>
+                <span class="muted" th:text="${group.message} ?: ''"></span>
+            </td>
+            <td th:text="${group.count}">1</td>
+            <td th:text="${#temporals.format(group.firstSeen, 'dd.MM HH:mm')}">01.01 00:00</td>
+            <td th:text="${#temporals.format(group.lastSeen, 'dd.MM HH:mm')}">01.01 00:00</td>
+            <td th:text="${group.lastDevice} ?: '—'">Pixel</td>
+            <td th:text="${group.lastVersion} ?: '—'">1.20</td>
+            <td>
+                <details>
+                    <summary>показать</summary>
+                    <pre th:text="${group.last.stacktrace}"></pre>
+                </details>
+            </td>
+        </tr>
+    </table>
+    <p class="muted" th:if="${groups.isEmpty()}">Отчётов нет.</p>
+</main>
+</body>
+</html>

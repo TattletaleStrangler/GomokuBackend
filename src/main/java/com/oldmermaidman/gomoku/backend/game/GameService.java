@@ -18,6 +18,7 @@ import com.oldmermaidman.gomoku.backend.game.dto.GameHistoryView;
 import com.oldmermaidman.gomoku.backend.game.dto.GameSnapshot;
 import com.oldmermaidman.gomoku.backend.game.dto.LobbyGameView;
 import com.oldmermaidman.gomoku.backend.config.GameProperties;
+import com.oldmermaidman.gomoku.backend.moderation.BanRepository;
 import com.oldmermaidman.gomoku.backend.user.User;
 import com.oldmermaidman.gomoku.backend.user.UserRepository;
 import com.oldmermaidman.gomoku.backend.ws.GameChanged;
@@ -74,6 +75,7 @@ public class GameService {
     private final GameProperties properties;
     private final ApplicationEventPublisher events;
     private final EntityManager entityManager;
+    private final BanRepository bans;
     private final SecureRandom random = new SecureRandom();
 
     public GameService(
@@ -83,7 +85,8 @@ public class GameService {
             Clock clock,
             GameProperties properties,
             ApplicationEventPublisher events,
-            EntityManager entityManager) {
+            EntityManager entityManager,
+            BanRepository bans) {
         this.games = games;
         this.moves = moves;
         this.users = users;
@@ -91,6 +94,7 @@ public class GameService {
         this.properties = properties;
         this.events = events;
         this.entityManager = entityManager;
+        this.bans = bans;
     }
 
     // ---- rooms ------------------------------------------------------------
@@ -135,6 +139,11 @@ public class GameService {
         Instant now = clock.instant();
         User me = lockUser(userId);
         failIfPlaying(userId);
+        // A ban is decided by an admin (FEATURES.md, B4) and closes quick match only:
+        // rooms by code stay open, so friends can still play.
+        if (bans.isActive(userId, now)) {
+            throw new ApiException(ApiError.BANNED, "Ranked games are closed for this account");
+        }
 
         lockMatchmakingBucket(rule, timeControl);
 
@@ -172,7 +181,8 @@ public class GameService {
                 rule == null ? null : rule.name(),
                 timeControl == null ? null : timeControl.name(),
                 userId,
-                LOBBY_LIMIT);
+                LOBBY_LIMIT,
+                clock.instant());
         List<UUID> creators = rooms.stream()
                 .map(GameEntity::getBlackUserId)
                 .filter(Objects::nonNull)

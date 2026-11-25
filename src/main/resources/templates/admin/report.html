@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('Жалоба')}"></head>
+<body>
+<nav th:replace="~{admin/fragments :: nav}"></nav>
+<main>
+    <p><a th:href="@{/admin/reports}">← ко всем жалобам</a></p>
+    <h1>Жалоба <span class="pill" th:classappend="${card.report.status}" th:text="${card.report.status}">NEW</span></h1>
+    <p>
+        <span th:text="${card.reporterNickname}">ann</span>
+        жалуется на
+        <a th:href="@{/admin/users/{id}(id=${card.reported.id})}" th:text="${card.reported.nickname}">bob</a>,
+        причина: <b th:text="${card.report.reason}">OTHER</b>,
+        <span class="muted" th:text="${#temporals.format(card.report.createdAt, 'dd.MM.yyyy HH:mm')}">01.01.2026 00:00</span>
+    </p>
+
+    <div class="cards">
+        <div class="card">
+            <span class="muted">Рейтинг</span>
+            <b th:text="${card.reported.rating}">1200</b>
+        </div>
+        <div class="card">
+            <span class="muted">Жалоб на аккаунт</span>
+            <b th:text="${card.reportsAgainst}">1</b>
+            <span class="muted" th:text="'от ' + ${card.distinctReporters} + ' человек'">от 1 человек</span>
+        </div>
+        <div class="card">
+            <span class="muted">Аккаунт создан</span>
+            <b th:text="${#temporals.format(card.reported.createdAt, 'dd.MM.yyyy')}">01.01.2026</b>
+        </div>
+        <div class="card">
+            <span class="muted">Забанен сейчас</span>
+            <b th:classappend="${card.bannedNow} ? 'banned' : ''" th:text="${card.bannedNow} ? 'да' : 'нет'">нет</b>
+        </div>
+    </div>
+
+    <h2>Партия</h2>
+    <div th:if="${card.game != null}">
+        <p class="muted">
+            <span th:text="${card.game.rule}">FREESTYLE</span>,
+            <span th:text="${card.game.timeControl}">UNTIMED</span>,
+            <span th:text="${card.game.status}">FINISHED</span>,
+            результат <span th:text="${card.game.result}">DRAW</span>
+            (<span th:text="${card.game.finishReason}">AGREE</span>),
+            ходов: <span th:text="${card.moves.size()}">0</span>
+        </p>
+        <p class="moves">
+            <span th:each="move, it : ${card.moves}">
+                <span th:text="${it.count} + '. ' + ${moveLabels[it.index]} + ' ' + ${move.color}">1. H8 BLACK</span>;
+            </span>
+        </p>
+        <p><a th:href="@{/admin/reports}">Ходы по порядку — всё, что записал сервер.</a></p>
+    </div>
+    <p class="muted" th:if="${card.game == null}">Партия не указана.</p>
+
+    <h2>Что уже делали с аккаунтом</h2>
+    <table>
+        <tr><th>Когда</th><th>Действие</th><th>Заметка</th></tr>
+        <tr th:each="action : ${card.actions}">
+            <td th:text="${#temporals.format(action.createdAt, 'dd.MM.yyyy HH:mm')}">01.01.2026 00:00</td>
+            <td th:text="${action.action}">WARN</td>
+            <td th:text="${action.note} ?: '—'">—</td>
+        </tr>
+    </table>
+    <p class="muted" th:if="${card.actions.isEmpty()}">Пока ничего.</p>
+
+    <h2>Баны</h2>
+    <table>
+        <tr><th>Выдан</th><th>До</th><th>Причина</th></tr>
+        <tr th:each="ban : ${card.bans}">
+            <td th:text="${#temporals.format(ban.createdAt, 'dd.MM.yyyy HH:mm')}">01.01.2026 00:00</td>
+            <td th:text="${#temporals.format(ban.until, 'dd.MM.yyyy HH:mm')}">01.01.2026 00:00</td>
+            <td th:text="${ban.reason}">—</td>
+        </tr>
+    </table>
+    <p class="muted" th:if="${card.bans.isEmpty()}">Банов не было.</p>
+
+    <h2>Решение</h2>
+    <form class="act" th:action="@{/admin/reports/{id}/act(id=${card.report.id})}" method="post">
+        <select name="action">
+            <option th:each="a : ${actions}" th:value="${a}" th:text="${a}">WARN</option>
+        </select>
+        <input type="number" name="days" min="1" max="365" placeholder="дней для BAN_RANKED"/>
+        <input type="text" name="note" size="40" placeholder="заметка (видна только в админке)"/>
+        <button type="submit">Применить</button>
+    </form>
+    <p class="muted">
+        REVIEW и DISMISS закрывают жалобу, WARN отмечает предупреждение,
+        BAN_RANKED отключает быстрый подбор на N дней, BAN_ACCOUNT запрещает вход,
+        UNBAN снимает все баны.
+    </p>
+</main>
+</body>
+</html>

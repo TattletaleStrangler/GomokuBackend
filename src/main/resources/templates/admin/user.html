@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('Аккаунт')}"></head>
+<body>
+<nav th:replace="~{admin/fragments :: nav}"></nav>
+<main>
+    <p><a th:href="@{/admin/reports}">← к жалобам</a></p>
+    <h1 th:text="${card.user.nickname}">bob</h1>
+    <p class="muted">
+        Рейтинг <span th:text="${card.user.rating}">1200</span>,
+        создан <span th:text="${#temporals.format(card.user.createdAt, 'dd.MM.yyyy')}">01.01.2026</span>,
+        роль <span th:text="${card.user.role}">PLAYER</span>
+    </p>
+    <p>
+        Жалоб: <b th:text="${card.reportsAgainst}">0</b>
+        от <b th:text="${card.distinctReporters}">0</b> человек.
+        <span class="banned" th:if="${card.bannedNow}">Аккаунт забанен сейчас.</span>
+    </p>
+
+    <h2>Баны</h2>
+    <table>
+        <tr><th>Выдан</th><th>До</th><th>Причина</th></tr>
+        <tr th:each="ban : ${card.bans}">
+            <td th:text="${#temporals.format(ban.createdAt, 'dd.MM.yyyy HH:mm')}">01.01.2026 00:00</td>
+            <td th:text="${#temporals.format(ban.until, 'dd.MM.yyyy HH:mm')}">01.01.2026 00:00</td>
+            <td th:text="${ban.reason}">—</td>
+        </tr>
+    </table>
+    <p class="muted" th:if="${card.bans.isEmpty()}">Банов не было.</p>
+
+    <h2>История решений</h2>
+    <table>
+        <tr><th>Когда</th><th>Действие</th><th>Заметка</th></tr>
+        <tr th:each="action : ${card.actions}">
+            <td th:text="${#temporals.format(action.createdAt, 'dd.MM.yyyy HH:mm')}">01.01.2026 00:00</td>
+            <td th:text="${action.action}">WARN</td>
+            <td th:text="${action.note} ?: '—'">—</td>
+        </tr>
+    </table>
+    <p class="muted" th:if="${card.actions.isEmpty()}">Пока ничего.</p>
+
+    <h2>Действие</h2>
+    <form class="act" th:action="@{/admin/users/{id}/act(id=${card.user.id})}" method="post">
+        <select name="action">
+            <option th:each="a : ${actions}" th:value="${a}" th:text="${a}">UNBAN</option>
+        </select>
+        <input type="number" name="days" min="1" max="365" placeholder="дней для BAN_RANKED"/>
+        <input type="text" name="note" size="40" placeholder="заметка"/>
+        <button type="submit">Применить</button>
+    </form>
+</main>
+</body>
+</html>

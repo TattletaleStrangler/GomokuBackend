@@ -38,6 +38,21 @@ public class ReportEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Where the report is in the queue; nothing is ever deleted. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private ReportStatus status;
+
+    @Column(name = "reviewed_by")
+    private UUID reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
+    /** The admin's own words, for the next person who opens this report. */
+    @Column(length = 200)
+    private String note;
+
     /** For JPA only. */
     protected ReportEntity() {
     }
@@ -55,6 +70,15 @@ public class ReportEntity {
         this.gameId = gameId;
         this.reason = reason;
         this.createdAt = createdAt;
+        this.status = ReportStatus.NEW;
+    }
+
+    /** Records the decision and who made it. */
+    public void review(ReportStatus status, UUID adminId, String note, Instant now) {
+        this.status = status;
+        this.reviewedBy = adminId;
+        this.reviewedAt = now;
+        this.note = note;
     }
 
     public UUID getId() {
@@ -79,5 +103,21 @@ public class ReportEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public ReportStatus getStatus() {
+        return status;
+    }
+
+    public UUID getReviewedBy() {
+        return reviewedBy;
+    }
+
+    public Instant getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public String getNote() {
+        return note;
     }
 }

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('Вход в админку')}"></head>
+<body>
+<main class="login">
+    <h1>Админка Gomoku</h1>
+    <p class="muted">Войдите аккаунтом, которому выдан доступ администратора.</p>
+    <p class="error" th:if="${param.error}">Неверный ник или пароль, либо у аккаунта нет прав администратора.</p>
+    <p class="muted" th:if="${param.logout}">Вы вышли.</p>
+    <form th:action="@{/admin/login}" method="post">
+        <input type="text" name="username" placeholder="Ник" autofocus autocomplete="username"/>
+        <input type="password" name="password" placeholder="Пароль" autocomplete="current-password"/>
+        <button type="submit">Войти</button>
+    </form>
+</main>
+</body>
+</html>

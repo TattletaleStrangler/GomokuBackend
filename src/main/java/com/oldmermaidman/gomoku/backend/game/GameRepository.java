@@ -62,6 +62,10 @@ public interface GameRepository extends JpaRepository<GameEntity, UUID> {
                     select 1 from blocks b
                     where (b.blocker_id = :userId and b.blocked_id = g.black_user_id)
                        or (b.blocker_id = g.black_user_id and b.blocked_id = :userId))
+              and not exists (
+                    select 1 from bans bn
+                    where bn.user_id = g.black_user_id
+                      and bn.until > cast(:now as timestamptz))
             order by g.created_at
             limit 1
             for update of g skip locked
@@ -87,6 +91,10 @@ public interface GameRepository extends JpaRepository<GameEntity, UUID> {
                     select 1 from blocks b
                     where (b.blocker_id = :viewer and b.blocked_id = black_user_id)
                        or (b.blocker_id = black_user_id and b.blocked_id = :viewer))
+              and not exists (
+                    select 1 from bans bn
+                    where bn.user_id = black_user_id
+                      and bn.until > cast(:now as timestamptz))
             order by created_at
             limit :limit
             """, nativeQuery = true)
@@ -94,7 +102,8 @@ public interface GameRepository extends JpaRepository<GameEntity, UUID> {
             @Param("rule") String rule,
             @Param("timeControl") String timeControl,
             @Param("viewer") UUID viewer,
-            @Param("limit") int limit);
+            @Param("limit") int limit,
+            @Param("now") Instant now);
 
     /**
      * Finished games of a player, newest first (FEATURES.md, B2). Waiting rooms that

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('Ошибки сервера')}"></head>
+<body>
+<nav th:replace="~{admin/fragments :: nav}"></nav>
+<main>
+    <h1>Ошибки сервера</h1>
+    <p class="muted">
+        Сюда попадают только ответы 5xx. В каждой строке есть <code>requestId</code> —
+        тот же, что ушёл клиенту в заголовке и в теле ошибки: по нему жалобу игрока
+        можно связать со стектрейсом.
+    </p>
+    <table>
+        <tr>
+            <th>Когда</th><th>Код</th><th>Запрос</th><th>Ошибка</th><th>Request id</th><th>Стек</th>
+        </tr>
+        <tr th:each="error : ${errors}">
+            <td th:text="${#temporals.format(error.occurredAt, 'dd.MM HH:mm:ss')}">01.01 00:00:00</td>
+            <td th:text="${error.status}">500</td>
+            <td th:text="${error.method} + ' ' + ${error.path}">POST /api/v1/games</td>
+            <td>
+                <span th:text="${error.errorCode}">INTERNAL_ERROR</span><br/>
+                <span class="muted" th:text="${error.message}">Unexpected error</span>
+            </td>
+            <td class="moves" th:text="${error.requestId}">—</td>
+            <td>
+                <details th:if="${error.stacktrace != null}">
+                    <summary>показать</summary>
+                    <pre th:text="${error.stacktrace}"></pre>
+                </details>
+            </td>
+        </tr>
+    </table>
+    <p class="muted" th:if="${errors.isEmpty()}">Ошибок нет — и это хорошо.</p>
+</main>
+</body>
+</html>

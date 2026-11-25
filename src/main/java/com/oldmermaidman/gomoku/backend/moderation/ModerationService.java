@@ -55,6 +55,11 @@ public class ModerationService {
     @Transactional
     public void report(UUID userId, UUID gameId, ReportReason reason) {
         UUID opponent = opponentOf(userId, gameId);
+        // One complaint per game is enough: a repeat is accepted silently, so the client
+        // does not have to distinguish "sent" from "already sent".
+        if (reports.existsByReporterIdAndGameId(userId, gameId)) {
+            return;
+        }
         Instant dayAgo = clock.instant().minus(Duration.ofDays(1));
         if (reports.countByReporterIdAndCreatedAtAfter(userId, dayAgo) >= MAX_REPORTS_PER_DAY) {
             throw new ApiException(ApiError.RATE_LIMITED, "Too many reports today");

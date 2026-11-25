@@ -8,6 +8,7 @@ import com.oldmermaidman.gomoku.backend.auth.dto.TokenResponse;
 import com.oldmermaidman.gomoku.backend.auth.dto.UserResponse;
 import com.oldmermaidman.gomoku.backend.common.ApiError;
 import com.oldmermaidman.gomoku.backend.common.ApiException;
+import com.oldmermaidman.gomoku.backend.moderation.BanRepository;
 import com.oldmermaidman.gomoku.backend.common.RateLimiter;
 import com.oldmermaidman.gomoku.backend.config.JwtProperties;
 import com.oldmermaidman.gomoku.backend.config.RateLimitProperties;
@@ -52,6 +53,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final RateLimiter rateLimiter;
     private final RateLimitProperties rateLimitProperties;
+    private final BanRepository bans;
     private final SecureRandom random = new SecureRandom();
 
     /**
@@ -75,6 +77,7 @@ public class AuthService {
             JwtProperties jwtProperties,
             RateLimiter rateLimiter,
             RateLimitProperties rateLimitProperties,
+            BanRepository bans,
             PlatformTransactionManager transactionManager) {
         this.users = users;
         this.refreshTokens = refreshTokens;
@@ -83,6 +86,7 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
         this.rateLimiter = rateLimiter;
         this.rateLimitProperties = rateLimitProperties;
+        this.bans = bans;
         this.dummyHash = passwordEncoder.encode("gomoku-dummy-password");
 
         this.revocationTransaction = new TransactionTemplate(transactionManager);
@@ -136,6 +140,11 @@ public class AuthService {
         }
 
         rateLimiter.reset(guardKey);
+        // A ban that closes the account is checked here; a ban from ranked play is not,
+        // because such a player may still sign in and play rooms by code (B4).
+        if (bans.isAccountBanned(user.getId(), Instant.now())) {
+            throw new ApiException(ApiError.BANNED, "This account is closed by an administrator");
+        }
         return issueTokens(user);
     }
 

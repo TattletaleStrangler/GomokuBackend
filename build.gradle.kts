@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.oldmermaidman.gomoku"
-version = "0.8.0"
+version = "0.9.0"
 
 repositories {
     mavenCentral()
@@ -27,6 +27,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+
+    // The admin panel (FEATURES.md, B4) is server-rendered: one deployment, no CORS, no
+    // separate front end to keep alive.
+    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 
     // Schema is owned by Flyway. Since Spring Boot 4 the auto-configuration lives in
     // its own module — `flyway-core` alone would be on the classpath but never run —

@@ -48,6 +48,10 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  admin:
+    # Register an ordinary account with this nickname first, then restart: it is
+    # promoted to administrator and may open /admin. Empty means nobody is promoted.
+    nickname: ${ADMIN_NICKNAME:}
   jwt:
     # Secrets come from the environment only; see ../Backend/.env.example.
     secret: ${JWT_SECRET:}

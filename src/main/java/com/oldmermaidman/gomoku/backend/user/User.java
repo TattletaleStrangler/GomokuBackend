@@ -3,6 +3,8 @@ package com.oldmermaidman.gomoku.backend.user;
 import com.oldmermaidman.gomoku.backend.game.domain.EloRating;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -36,6 +38,11 @@ public class User {
     @Column(nullable = false)
     private int rating;
 
+    /** Players may only play; an administrator may also review reports (B4). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 8)
+    private UserRole role;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -49,6 +56,7 @@ public class User {
         this.passwordHash = passwordHash;
         this.createdAt = createdAt;
         this.rating = EloRating.START;
+        this.role = UserRole.PLAYER;
     }
 
     public UUID getId() {
@@ -73,6 +81,15 @@ public class User {
 
     public void setRating(int rating) {
         this.rating = rating;
+    }
+
+    public UserRole getRole() {
+        return role;
+    }
+
+    /** Promotes the account once, when the configured administrator logs in for the first time. */
+    public void promoteToAdmin() {
+        this.role = UserRole.ADMIN;
     }
 
     public Instant getDeletedAt() {
