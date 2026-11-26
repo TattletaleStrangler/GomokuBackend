@@ -18,8 +18,9 @@ import java.io.IOException;
  * <p>Every body the client sends is a small JSON document; the largest field is a crash
  * stack trace, capped at 20 000 characters by validation. Without this check a client
  * could stream megabytes into any endpoint and make the server buffer them. A request
- * with no declared length (chunked) is refused too: a body that cannot be measured
- * cannot be bounded, and the Android and curl clients always declare it.
+ * whose body arrives chunked is refused as well: a body that cannot be measured cannot
+ * be bounded. A request with no body at all is fine — it declares no length either, and
+ * refusing it turned every body-less POST into a 413 instead of the answer it deserved.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
@@ -51,11 +52,12 @@ public class RequestSizeFilter extends OncePerRequestFilter {
             FilterChain chain) throws ServletException, IOException {
 
         long declared = request.getContentLengthLong();
-        if (declared > MAX_BODY_BYTES || declared < 0) {
+        boolean chunked = "chunked".equalsIgnoreCase(request.getHeader("Transfer-Encoding"));
+        if (declared > MAX_BODY_BYTES || (declared < 0 && chunked)) {
             errorWriter.write(
                     response,
                     ApiError.PAYLOAD_TOO_LARGE,
-                    "Request body is too large or has no declared length");
+                    "Request body is too large or arrives in chunks");
             return;
         }
         chain.doFilter(request, response);

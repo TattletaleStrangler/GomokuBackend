@@ -45,6 +45,7 @@ public enum ApiError {
     BANNED(HttpStatus.FORBIDDEN),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS),
     PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final HttpStatus status;

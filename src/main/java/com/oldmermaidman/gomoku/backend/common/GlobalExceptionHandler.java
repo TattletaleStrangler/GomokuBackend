@@ -6,13 +6,17 @@ import com.oldmermaidman.gomoku.backend.telemetry.TelemetryService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -69,6 +73,35 @@ public class GlobalExceptionHandler {
                 "Request body is not valid JSON",
                 Map.of(),
                 requestId(request)));
+    }
+
+    /**
+     * A path that does not fit the mapping: {@code /games/lobby} reaching a mapping that
+     * expects a UUID, for example. This is a client mistake, not a server failure — it
+     * used to answer 500 and land in {@code error_events}, where an old client (or
+     * anyone at all) could fill the table with rows that say nothing.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<ErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException e, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.of(
+                ApiError.NOT_FOUND, "No such resource", Map.of(), requestId(request)));
+    }
+
+    /** A known path called with the wrong verb, for example a POST to a read-only one. */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException e, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ErrorResponse.of(
+                ApiError.METHOD_NOT_ALLOWED, "Method not allowed", Map.of(), requestId(request)));
+    }
+
+    /** An address nothing is mapped to; Spring answers with this instead of a 404 page. */
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ErrorResponse> handleNoResource(
+            NoResourceFoundException e, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.of(
+                ApiError.NOT_FOUND, "No such resource", Map.of(), requestId(request)));
     }
 
     @ExceptionHandler(Exception.class)
