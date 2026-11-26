@@ -123,6 +123,48 @@ class GameModerationTest extends GameTestSupport {
     }
 
     @Test
+    void aBlockedPlayerCanBeListedAndLetBack() throws Exception {
+        Player alice = newPlayer();
+        Player bob = newPlayer();
+        String gameId = openGame(alice, bob, "UNTIMED");
+        action(alice, gameId, "resign");
+        assertThat(block(alice, gameId).status()).isEqualTo(204);
+
+        Response list = get("/api/v1/blocks", alice.token());
+        assertThat(list.status()).isEqualTo(200);
+        assertThat(list.text("$[0].nickname")).isEqualTo(bob.nickname());
+        String bobId = list.text("$[0].userId");
+
+        // Somebody else's block list is none of bob's business.
+        assertThat(get("/api/v1/blocks", bob.token()).size("$")).isZero();
+
+        // Letting him back works, and doing it twice is not an error.
+        assertThat(delete("/api/v1/blocks/" + bobId, "", alice.token()).status()).isEqualTo(204);
+        assertThat(delete("/api/v1/blocks/" + bobId, "", alice.token()).status()).isEqualTo(204);
+        assertThat(get("/api/v1/blocks", alice.token()).size("$")).isZero();
+    }
+
+    @Test
+    void unblockingBringsThePairBackToTheLobby() throws Exception {
+        Player alice = newPlayer();
+        Player bob = newPlayer();
+        String gameId = openGame(alice, bob, "UNTIMED");
+        action(alice, gameId, "resign");
+        assertThat(block(alice, gameId).status()).isEqualTo(204);
+
+        String bobRoom = quickMatch(bob, "FREESTYLE", "RAPID").text("$.gameId");
+        assertThat(lobby(alice).size("$[?(@.creatorNickname=='" + bob.nickname() + "')]")).isZero();
+
+        String bobId = get("/api/v1/blocks", alice.token()).text("$[0].userId");
+        assertThat(delete("/api/v1/blocks/" + bobId, "", alice.token()).status()).isEqualTo(204);
+
+        assertThat(lobby(alice).size("$[?(@.creatorNickname=='" + bob.nickname() + "')]")).isEqualTo(1);
+
+        // Leave no waiting room behind: other tests share this database.
+        action(bob, bobRoom, "leave");
+    }
+
+    @Test
     void theSameGameCannotBeReportedTwice() throws Exception {
         Player alice = newPlayer();
         Player bob = newPlayer();

@@ -4,13 +4,18 @@ import com.oldmermaidman.gomoku.backend.common.ApiError;
 import com.oldmermaidman.gomoku.backend.common.ApiException;
 import com.oldmermaidman.gomoku.backend.game.GameEntity;
 import com.oldmermaidman.gomoku.backend.game.GameRepository;
+import com.oldmermaidman.gomoku.backend.user.User;
+import com.oldmermaidman.gomoku.backend.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Blocking and reporting an opponent (FUTURE.md).
@@ -28,16 +33,19 @@ public class ModerationService {
     private final GameRepository games;
     private final BlockRepository blocks;
     private final ReportRepository reports;
+    private final UserRepository users;
     private final Clock clock;
 
     public ModerationService(
             GameRepository games,
             BlockRepository blocks,
             ReportRepository reports,
+            UserRepository users,
             Clock clock) {
         this.games = games;
         this.blocks = blocks;
         this.reports = reports;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -51,8 +59,41 @@ public class ModerationService {
         blocks.save(new BlockEntity(UUID.randomUUID(), userId, opponent, clock.instant()));
     }
 
-    /** Records a complaint about the opponent of [gameId]. */
+    /** One row of the block list: who was blocked, under which nickname, and when. */
+    public record BlockedPlayer(UUID userId, String nickname, Instant blockedAt) {
+    }
+
+    /**
+     * Everybody the caller has blocked, newest first.
+     *
+     * <p>A block is a mistake waiting to happen — one tap next to "play again" — so the
+     * list is the way back. Nicknames come in one extra query rather than one per row.
+     */
+    @Transactional(readOnly = true)
+    public List<BlockedPlayer> blocks(UUID userId) {
+        List<BlockEntity> rows = blocks.findByBlockerIdOrderByCreatedAtDesc(userId);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, String> nicknames = users
+                .findAllById(rows.stream().map(BlockEntity::getBlockedId).toList())
+                .stream()
+                .collect(Collectors.toMap(User::getId, User::getNickname));
+        return rows.stream()
+                .map(row -> new BlockedPlayer(
+                        row.getBlockedId(),
+                        nicknames.get(row.getBlockedId()),
+                        row.getCreatedAt()))
+                .toList();
+    }
+
+    /** Lifts one block; lifting one that is not there changes nothing. */
     @Transactional
+    public void unblock(UUID userId, UUID blockedId) {
+        blocks.deleteByBlockerIdAndBlockedId(userId, blockedId);
+    }
+
+    /** Records a complaint about the opponent of [gameId]. */    @Transactional
     public void report(UUID userId, UUID gameId, ReportReason reason) {
         UUID opponent = opponentOf(userId, gameId);
         // One complaint per game is enough: a repeat is accepted silently, so the client
