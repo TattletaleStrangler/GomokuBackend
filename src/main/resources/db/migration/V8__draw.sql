@@ -1,4 +1,4 @@
--- Draw offers (FUTURE.md): the same request/answer shape as an undo, except that an
+-- Draw offers (FEATURES.md): the same request/answer shape as an undo, except that an
 -- accepted offer ends the game with a draw. Refusals and timeouts cost an attempt, so
 -- the offer cannot be used to pester the opponent.
 

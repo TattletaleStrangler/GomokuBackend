@@ -14,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Blocking and reporting an opponent (FUTURE.md).
+ * Blocking and reporting an opponent (FEATURES.md).
  *
  * <p>A block hides the pair from the lobby and from quick match in both directions;
  * a report is stored with the reason and the game, and is capped per day.

@@ -1,4 +1,4 @@
--- Blocking and reports (FUTURE.md).
+-- Blocking and reports (FEATURES.md).
 --
 -- Public quick match brings strangers together: a player can stop meeting somebody
 -- again, and can report them. Blocks are used by the lobby and the matchmaking query,

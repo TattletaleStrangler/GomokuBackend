@@ -14,7 +14,7 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Draw offers (FUTURE.md).
+ * Draw offers (FEATURES.md).
  *
  * <p>The same request/answer shape as an undo: the opponent has ten seconds, a refusal
  * or a timeout costs the offerer an attempt, and an accepted offer ends the game with a

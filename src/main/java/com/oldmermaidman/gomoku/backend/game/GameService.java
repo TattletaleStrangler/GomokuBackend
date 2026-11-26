@@ -440,7 +440,7 @@ public class GameService {
     // ---- rematch ----------------------------------------------------------
 
     /**
-     * Offers a rematch of a finished game (FUTURE.md).
+     * Offers a rematch of a finished game (FEATURES.md).
      *
      * <p>The first caller opens a private room with the same rule and clock but with
      * the colours swapped — they take the colour they did not play — and the finished
@@ -627,7 +627,7 @@ public class GameService {
     // ---- draw offers ------------------------------------------------------
 
     /**
-     * Offers a draw (FUTURE.md). Unlike an undo, an offer is possible at any moment of
+     * Offers a draw (FEATURES.md). Unlike an undo, an offer is possible at any moment of
      * a running game; the opponent decides within {@code app.game.draw.decision-timeout}
      * and a refusal or a timeout costs the offerer one of {@code app.game.draw.limit}
      * attempts. While the offer waits, the clock of the player who has to answer stops.

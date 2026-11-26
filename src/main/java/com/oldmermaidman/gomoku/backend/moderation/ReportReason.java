@@ -1,6 +1,6 @@
 package com.oldmermaidman.gomoku.backend.moderation;
 
-/** Why a player is reported (FUTURE.md). A short list, not free text. */
+/** Why a player is reported (FEATURES.md). A short list, not free text. */
 public enum ReportReason {
     /** The nickname itself. */
     NICKNAME,

@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * The player's own block list (FUTURE.md).
+ * The player's own block list (FEATURES.md).
  *
  * <p>Blocking happens in a single tap on the game screen, so a mistake has to be
  * reversible: this is where the blocked players are listed and where one is let back.

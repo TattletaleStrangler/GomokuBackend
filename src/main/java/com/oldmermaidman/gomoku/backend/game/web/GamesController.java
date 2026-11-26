@@ -115,7 +115,7 @@ public class GamesController {
         return games.resign(user.id(), id);
     }
 
-    /** Offers or accepts a rematch of a finished game (FUTURE.md). */
+    /** Offers or accepts a rematch of a finished game (FEATURES.md). */
     @PostMapping("/{id}/rematch")
     public GameSnapshot rematch(
             @AuthenticationPrincipal AuthenticatedUser user,
@@ -140,7 +140,7 @@ public class GamesController {
         return games.decideUndo(user.id(), id, request.accept());
     }
 
-    /** Offers a draw (FUTURE.md); the opponent has ten seconds to answer. */
+    /** Offers a draw (FEATURES.md); the opponent has ten seconds to answer. */
     @PostMapping("/{id}/draw-offer")
     public GameSnapshot requestDraw(
             @AuthenticationPrincipal AuthenticatedUser user,

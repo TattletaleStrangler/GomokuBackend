@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 /**
- * Blocking and reporting the opponent of a game (FUTURE.md, B4 for the review side).
+ * Blocking and reporting the opponent of a game (FEATURES.md, B4 for the review side).
  *
  * <p>Both answer with 204: the client does not need anything back, and there is nothing
  * to show about a complaint.

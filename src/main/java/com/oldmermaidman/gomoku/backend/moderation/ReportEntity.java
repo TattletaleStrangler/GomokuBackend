@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A complaint about an opponent (table {@code reports}, FUTURE.md). Free text is
+ * A complaint about an opponent (table {@code reports}, FEATURES.md). Free text is
  * deliberately absent: a short list of reasons is enough to act on and cannot leak
  * anything the reporter did not mean to say.
  */

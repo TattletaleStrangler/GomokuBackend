@@ -18,7 +18,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Blocking and reporting an opponent (FUTURE.md).
+ * Blocking and reporting an opponent (FEATURES.md).
  *
  * <p>Both act on the other player of a game the caller is in — there is no user search,
  * so nobody can block a stranger they never met. Blocking is idempotent and used by the

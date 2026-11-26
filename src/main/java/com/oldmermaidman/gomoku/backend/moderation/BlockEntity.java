@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * One direction of a block (table {@code blocks}, FUTURE.md): [blockerId] does not want
+ * One direction of a block (table {@code blocks}, FEATURES.md): [blockerId] does not want
  * to meet [blockedId] again. The direction matters, so the pair is unique but not
  * symmetrical.
  */

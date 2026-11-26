@@ -10,7 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A rematch of a finished game (FUTURE.md).
+ * A rematch of a finished game (FEATURES.md).
  *
  * <p>The first caller opens a private room with the colours swapped; the finished game
  * points at it so the opponent is offered the same room, and their call joins it.
