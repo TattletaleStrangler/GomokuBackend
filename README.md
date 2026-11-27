@@ -57,7 +57,7 @@ Gradle должен работать на JDK 21 или новее: компил
 ## Развёртывание
 
 Образ для прода собирает GitHub Actions (`.github/workflows/image.yml`): сначала прогон
-150 тестов, затем публикация в GHCR — `ghcr.io/tattletallestrangler/gomoku-backend` с
+150 тестов, затем публикация в GHCR — `ghcr.io/tattletalestrangler/gomokubackend` с
 тегами `latest`, версией сервера из `build.gradle.kts` и `sha-<короткий хеш>`. Образ
 без зелёных тестов не публикуется.
 

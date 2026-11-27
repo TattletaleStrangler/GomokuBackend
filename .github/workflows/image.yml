@@ -3,16 +3,6 @@ name: Backend
 # Builds the backend image and publishes it to GHCR, from where the production host
 # pulls it ready-made (docker-compose.prod.yml, USER_ACTION.md §13). Tests run first,
 # so an image without green tests is never published.
-#
-# Two things keep the publish step working:
-#   * the image name repeats the repository name in lower case — the Container registry
-#     links a package published by a workflow to the repository it runs in, and the
-#     documented pattern is ghcr.io/<owner>/<repository>;
-#   * the login uses the repository owner, because the packages are scoped to the
-#     account given at login.
-# If the installation token still cannot create the package, add a personal access
-# token (classic) with `write:packages` as the repository secret GHCR_TOKEN: the
-# workflow picks it up automatically (USER_ACTION.md §13).
 
 on:
   push:
@@ -23,7 +13,10 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE: ghcr.io/tattletallestrangler/gomokubackend
+  # Owner and repository in lower case, exactly as in the git remote: the registry
+  # answers a wrong owner with `denied: not_found: owner not found`, which says nothing
+  # about the actual mistake, so the step below checks the path before the build.
+  IMAGE: ghcr.io/tattletalestrangler/gomokubackend
 
 jobs:
   test:
@@ -56,6 +49,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check the image path against the repository owner
+        run: |
+          owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          case "$IMAGE" in
+            "$REGISTRY/$owner/"*) echo "publishing to $IMAGE" ;;
+            *) echo "::error::IMAGE must start with $REGISTRY/$owner/ but is $IMAGE"; exit 1 ;;
+          esac
+
       # The server version from build.gradle.kts becomes the image tag, so a deploy
       # can be pinned to a version instead of `latest`.
       - name: Read the version from build.gradle.kts
@@ -68,6 +69,9 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      # A personal access token (classic) with write:packages, stored as the GHCR_TOKEN
+      # secret, is the escape hatch when the installation token may not create the
+      # package (USER_ACTION.md §13).
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
