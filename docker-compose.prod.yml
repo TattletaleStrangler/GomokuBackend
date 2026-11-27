@@ -1,0 +1,77 @@
+# Production stack for container hosting (dockerhosting.ru with Portainer, a Docker VPS,
+# and anything else that already has a Docker engine).
+#
+# It differs from docker-compose.yml in one way: the image is not built here (`build: .`
+# is gone) but pulled from GHCR, where GitHub Actions has already built it
+# (.github/workflows/image.yml). The host then needs no JDK, no Gradle and no spare RAM
+# or minutes for a build.
+#
+# Deploy over SSH (plans with CLI):
+#   git clone https://github.com/TattletaleStrangler/GomokuBackend.git /opt/gomoku
+#   cd /opt/gomoku && cp .env.example .env && nano .env
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Deploy with Portainer (Stacks → Add stack): the Repository method with this file as the
+# compose path, or Web editor with the text below; values go into the Environment
+# variables section. Step by step: USER_ACTION.md §13.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gomoku}
+      POSTGRES_USER: ${POSTGRES_USER:-gomoku}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Nothing is published: the database is reachable only inside the stack network.
+    # Backups are taken with a command inside the container (USER_ACTION.md §13).
+    mem_limit: ${DB_MEM_LIMIT:-512m}
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/tattletallestrangler/gomoku-backend:${IMAGE_TAG:-latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Inside the stack network the database host is the service name.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-gomoku}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-gomoku}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-PT15M}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-P30D}
+      ADMIN_NICKNAME: ${ADMIN_NICKNAME:-}
+      # Public contact on /legal/privacy and /legal/delete-account: Google Play requires
+      # it, so never leave it empty on a public host.
+      LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
+      SERVER_PORT: 8080
+      TZ: ${TZ:-UTC}
+      # Memory has two knobs because hostings differ: the JVM takes 75 % of the
+      # container limit, and JAVA_OPTS overrides the heap directly for a host that
+      # runs the stack in Swarm mode, where Docker ignores mem_limit.
+      JAVA_OPTS: "${JAVA_OPTS:--XX:MaxRAMPercentage=75}"
+      # Swagger is a development tool; a public host does not need it (TZ_BACKEND.md §14).
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+    ports:
+      # SERVER_PORT is the port the hosting has opened for you. Behind a TLS proxy the
+      # port is published on the loopback only: SERVER_PORT=127.0.0.1:8080.
+      - "${SERVER_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+    mem_limit: ${APP_MEM_LIMIT:-1500m}
+    restart: unless-stopped
+
+volumes:
+  pgdata:

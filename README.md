@@ -4,7 +4,7 @@
 Техническое задание — [`../TZ_BACKEND.md`](../TZ_BACKEND.md), действия владельца —
 [`../USER_ACTION.md`](../USER_ACTION.md), состояние клиента — [`../Gomoku/README.md`](../Gomoku/README.md).
 
-## Что реализовано (MVP 0.12.0 по ТЗ)
+## Что реализовано (MVP 0.13.0 по ТЗ)
 
 | Блок | Что есть |
 |---|---|
@@ -53,6 +53,29 @@ Gradle должен работать на JDK 21 или новее: компил
 `options.release = 21`.
 
 Проверка compose-файла без запуска: `docker compose config`.
+
+## Развёртывание
+
+Образ для прода собирает GitHub Actions (`.github/workflows/image.yml`): сначала прогон
+150 тестов, затем публикация в GHCR — `ghcr.io/tattletallestrangler/gomoku-backend` с
+тегами `latest`, версией сервера из `build.gradle.kts` и `sha-<короткий хеш>`. Образ
+без зелёных тестов не публикуется.
+
+```bash
+# на сервере: только запуск готового образа — ни JDK, ни Gradle, ни сборки
+git clone https://github.com/TattletaleStrangler/GomokuBackend.git /opt/gomoku
+cd /opt/gomoku
+cp .env.example .env      # POSTGRES_PASSWORD, JWT_SECRET, ADMIN_NICKNAME,
+                          # LEGAL_CONTACT_EMAIL, SERVER_PORT — порт, открытый на хостинге
+docker compose -f docker-compose.prod.yml up -d
+curl http://127.0.0.1:8080/actuator/health
+```
+
+`docker-compose.prod.yml` рассчитан на контейнерный хостинг (Portainer на
+dockerhosting.ru, Docker VPS и подобное): база наружу не публикуется, память
+ограничена (`APP_MEM_LIMIT`/`DB_MEM_LIMIT`), Swagger выключен, версия образа задаётся
+`IMAGE_TAG`. Пошаговая инструкция для Portainer — [`../USER_ACTION.md`](../USER_ACTION.md)
+§13, требования к серверу — [`../TZ_BACKEND.md`](../TZ_BACKEND.md) §14.
 
 ## Проверить руками
 

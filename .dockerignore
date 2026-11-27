@@ -1,0 +1,13 @@
+# Build context of the image (Dockerfile): smaller and free of secrets and history.
+.git
+.github
+build
+.gradle
+out
+bin
+.env
+.env.*
+!.env.example
+*.log
+.idea
+*.iml

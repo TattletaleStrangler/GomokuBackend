@@ -28,4 +28,7 @@ USER app
 EXPOSE 8080
 
 ENV TZ=UTC
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
+
+# JAVA_OPTS lets a host cap the heap (for example -Xmx512m) without rebuilding the
+# image; by default the JVM takes 75 % of the container memory limit.
+ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS:--XX:MaxRAMPercentage=75} -jar /app/app.jar"]
