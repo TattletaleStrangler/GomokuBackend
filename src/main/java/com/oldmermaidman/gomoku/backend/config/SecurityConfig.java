@@ -102,10 +102,11 @@ public class SecurityConfig {
                             instanceof ApiError apiError ? apiError : ApiError.UNAUTHORIZED;
                     errorWriter.write(response, recorded, recorded.name());
                 }))
-                // Ahead of the token check, so a call refused by it is logged too, and
-                // around the limiter: a 429 shows up in the same line as the call.
-                .addFilterBefore(new RequestLogFilter(logRequests), JwtAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                // Listed after the token filter on purpose: a filter can only be placed
+                // relative to another one that already has a registered position, and an
+                // order of our own is what gives the token filter its position.
+                .addFilterBefore(new RequestLogFilter(logRequests), JwtAuthenticationFilter.class)
                 // After the token has been read, so the limit follows the account; the
                 // anonymous crash-report endpoint is counted by address instead.
                 .addFilterAfter(
