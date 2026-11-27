@@ -24,6 +24,8 @@ import com.oldmermaidman.gomoku.backend.user.UserRepository;
 import com.oldmermaidman.gomoku.backend.ws.GameChanged;
 import com.oldmermaidman.gomoku.backend.ws.GameEventType;
 import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -52,6 +54,8 @@ import java.util.stream.Stream;
  */
 @Service
 public class GameService {
+
+    private static final Logger log = LoggerFactory.getLogger(GameService.class);
 
     /** No {@code O/0/I/1}: a code is read out loud and typed by hand. */
     private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -162,6 +166,9 @@ public class GameService {
             GameEntity game = waiting.get();
             game.join(userId, color, now);
             events.publishEvent(new GameChanged(game.getId(), GameEventType.OPPONENT_JOINED));
+            log.info("quick match: {} joined room {}, which waited {} s",
+                    me.getNickname(), game.getCode(),
+                    Duration.between(game.getCreatedAt(), now).toSeconds());
             return snapshot(game, userId, List.of());
         }
 
@@ -171,6 +178,11 @@ public class GameService {
                 nextCode(), rule, timeControl, userId, creatorColor, Visibility.PUBLIC, true, now);
         games.save(game);
         events.publishEvent(new GameChanged(game.getId(), GameEventType.GAME_STATE));
+        // The line that explains a search which "does nothing": what the seeker asked for
+        // and with which rating decide whom they can be paired with, and both are here.
+        // Two such lines from two phones with different settings are the whole answer.
+        log.info("quick match: {} (rating {}) opened room {} for {}/{}: nothing waiting matched",
+                me.getNickname(), me.getRating(), game.getCode(), rule, timeControl);
         return snapshot(game, userId, List.of());
     }
 

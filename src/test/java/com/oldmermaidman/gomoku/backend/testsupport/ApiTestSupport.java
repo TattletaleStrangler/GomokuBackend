@@ -51,6 +51,8 @@ public abstract class ApiTestSupport {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("app.jwt.secret", () -> TEST_SECRET);
+        // A line per call would bury the test output; the server keeps it on.
+        registry.add("app.log.requests", () -> "false");
     }
 
     @LocalServerPort

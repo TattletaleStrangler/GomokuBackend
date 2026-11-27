@@ -48,6 +48,11 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  log:
+    # One INFO line per API call — method, path, status, duration, account, request id —
+    # written by RequestLogFilter. It is the only place a refused game call is visible:
+    # domain errors are 4xx, while the admin panel keeps 5xx. Tests switch it off.
+    requests: true
   admin:
     # Register an ordinary account with this nickname first, then restart: it is
     # promoted to administrator and may open /admin. Empty means nobody is promoted.

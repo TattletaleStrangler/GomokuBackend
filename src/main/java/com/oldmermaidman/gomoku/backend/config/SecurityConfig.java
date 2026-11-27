@@ -5,8 +5,10 @@ import com.oldmermaidman.gomoku.backend.common.ApiError;
 import com.oldmermaidman.gomoku.backend.common.ErrorWriter;
 import com.oldmermaidman.gomoku.backend.common.RateLimiter;
 import com.oldmermaidman.gomoku.backend.common.RequestLimitFilter;
+import com.oldmermaidman.gomoku.backend.common.RequestLogFilter;
 import com.oldmermaidman.gomoku.backend.user.AdminUserDetailsService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -66,7 +68,8 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtAuthenticationFilter jwtFilter,
             ErrorWriter errorWriter,
-            RateLimiter rateLimiter) throws Exception {
+            RateLimiter rateLimiter,
+            @Value("${app.log.requests:true}") boolean logRequests) throws Exception {
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -99,6 +102,9 @@ public class SecurityConfig {
                             instanceof ApiError apiError ? apiError : ApiError.UNAUTHORIZED;
                     errorWriter.write(response, recorded, recorded.name());
                 }))
+                // Ahead of the token check, so a call refused by it is logged too, and
+                // around the limiter: a 429 shows up in the same line as the call.
+                .addFilterBefore(new RequestLogFilter(logRequests), JwtAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 // After the token has been read, so the limit follows the account; the
                 // anonymous crash-report endpoint is counted by address instead.
