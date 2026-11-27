@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: ghcr.io/tattletallestrangler/gomoku-backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/tattletallestrangler/gomokubackend:${IMAGE_TAG:-latest}
     depends_on:
       postgres:
         condition: service_healthy

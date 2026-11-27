@@ -14,6 +14,12 @@ RUN ./gradlew --no-daemon bootJar -x test
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre
 
+# The source label connects the package to the repository in the Container registry:
+# without it the workflow's installation token has no right to push the image
+# (GitHub Docs, "Working with the Container registry").
+LABEL org.opencontainers.image.source="https://github.com/TattletaleStrangler/GomokuBackend"
+LABEL org.opencontainers.image.licenses="GPL-3.0-or-later"
+
 # curl is only for the container healthcheck (compose asks /actuator/health).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \

@@ -39,6 +39,9 @@ services:
       # Public contact on /legal/privacy and /legal/delete-account: the pages fall back
       # to the Play listing when it is empty, which is not enough for Google Play.
       LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
+      # Memory knob shared with the production stack: empty means the JVM takes 75 % of
+      # the container limit (Dockerfile).
+      JAVA_OPTS: ${JAVA_OPTS:-}
       SERVER_PORT: 8080
       TZ: ${TZ:-UTC}
     ports:

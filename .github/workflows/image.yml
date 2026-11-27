@@ -4,8 +4,15 @@ name: Backend
 # pulls it ready-made (docker-compose.prod.yml, USER_ACTION.md §13). Tests run first,
 # so an image without green tests is never published.
 #
-# The package is private by default: either make it public in the GitHub package
-# settings or give the host a token with `read:packages` (USER_ACTION.md §13).
+# Two things keep the publish step working:
+#   * the image name repeats the repository name in lower case — the Container registry
+#     links a package published by a workflow to the repository it runs in, and the
+#     documented pattern is ghcr.io/<owner>/<repository>;
+#   * the login uses the repository owner, because the packages are scoped to the
+#     account given at login.
+# If the installation token still cannot create the package, add a personal access
+# token (classic) with `write:packages` as the repository secret GHCR_TOKEN: the
+# workflow picks it up automatically (USER_ACTION.md §13).
 
 on:
   push:
@@ -15,7 +22,8 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: ghcr.io/tattletallestrangler/gomoku-backend
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/tattletallestrangler/gomokubackend
 
 jobs:
   test:
@@ -62,9 +70,9 @@ jobs:
 
       - uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: docker/metadata-action@v5
         id: meta
